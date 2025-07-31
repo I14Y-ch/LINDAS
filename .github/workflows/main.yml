@@ -32,13 +32,13 @@ jobs:
     - name: Get OUTPUT_FILE_NAME from Python config
       id: get-output-filename
       run: |
-        OUTPUT_FILE=$(python -c "from Concept_mapping.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
+        OUTPUT_FILE=$(python -c "from concept2sharedDimension.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
         echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
         echo "filename=$OUTPUT_FILE" >> $GITHUB_OUTPUT
 
     - name: Process CodeLists
       run: |
-        python -m Concept_mapping.src.main
+        python -m concept2sharedDimension.src.main
 
     - name: Validate RDF
       run: |
