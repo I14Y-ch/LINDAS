@@ -1,7 +1,7 @@
 # I14Y to LINDAS
 ## Overview
 In this repository there are three types of mappings from json to rdf: 
-- **Concept_mapping** : mapping of I14Y Concepts to Lindas Shared Dimensions.
+- **concept2sharedDimension** : mapping of I14Y Concepts to Lindas Shared Dimensions.
 - **CPSV_mapping** : mapping of PublicServices in json format to rdf and ttl. 
 - **DCAT_mapping** : mapping of DCAT classes (Dataset, Catalog, Distribution, DataService) in json format to rdf and ttl.
 
