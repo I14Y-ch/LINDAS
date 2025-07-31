@@ -11,13 +11,9 @@ Concept_mapping/
 │   │   ├── processor.py   
 │   │   └── utils.py        
 │   └── main.py
-├── examples/  
-│   ├── arp_ch_sd.ttl    
-│   ├── sex_sd.ttl           
-│   └── test_versioning.ttl          
-├── README.md
-├── requirements.txt
-└── .gitignore
+├── examples/            
+│   └── noga_output.ttl          
+└── README.md
 ```
 
 ## Main components structure and functionalities
@@ -31,7 +27,6 @@ The main components are
 
 - Processing Flow (processor.py):
     - The VersionProcessor handles the version processing pipeline: for each version, it creates both identity (persistent) and version-specific objects
-    - Tracks changes between versions (additions, deletions, modifications)
       
 ## How to use the script
 
@@ -56,14 +51,15 @@ Update `config.py` with yours configuration data, in particular you need to set:
 
 **3. Run `main.py`.** 
 
-## I14Y to LINDAS - Next steps notes 
-In the last meeting 14.04.2025 (full presentation available in the repository) we have decided : 
-- When I14Y concepts are ready, publish I14Y concepts without the type SharedDimension to avoid confusion for the user
-- Manually check duplicates with already existing Shared dimension in LINDAS
-- Add SharedDimension type for all concepts that are ready and do not have duplicates.
-
 **Note for script future use**: To add the type SharedDimension to the Concepts autmatically via the script, uncomment the following line (inside the class `ConceptMetadataManager` and function `add_scheme_metadata`):
 ```
 self.vm.graph.add((uri, RDF.type, meta.SharedDimension))   
 
 ```
+## github Action - workflow
+In the folder `.github/workflows` you can find the `main.yml` file with the istructions to automatically update the I14Y graph on LINDAS. At the moment (31.07.2025) the synchronisation takes place automatically every week (monday at midnight). Synchronisation can also be triggered manually if necessary. 
+
+The authentication is done via github secrets STARDOG_USERNAME and STARDOG_PASSWORD_TEST (the instructions are set for the test environement, if you want to change on prod you just need to modify:
+- the `STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'` in `env` (in the `main.yml` file)
+- the call for the right secret for `STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}`  (in the `main.yml` file) in the "Clear Stardog graph" step and "Upload to Stardog" step.
+
