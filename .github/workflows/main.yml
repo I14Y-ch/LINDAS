@@ -1,0 +1,97 @@
+name: Weekly Concept2Lindas Update
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Runs at 00:00 every Monday
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.10'
+  STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
+  TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
+
+jobs:
+  update-codelists:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install rdflib requests
+
+    - name: Get OUTPUT_FILE_NAME from Python config
+      id: get-output-filename
+      run: |
+        OUTPUT_FILE=$(python -c "from Concept_mapping.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
+        echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+        echo "filename=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
+    - name: Process CodeLists
+      run: |
+        python -m Concept_mapping.src.main
+
+    - name: Validate RDF
+      run: |
+        python -c "
+        from rdflib import Graph
+        g = Graph()
+        g.parse('$OUTPUT_FILE', format='turtle')
+        print(f'Validated RDF with {len(g)} triples')
+        "
+
+    - name: Clear Stardog Graph
+      env:
+        STARDOG_USER: ${{ secrets.STARDOG_USER }}
+        STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+      run: |
+        python -c "
+        from requests import post
+        from requests.auth import HTTPBasicAuth
+        auth = HTTPBasicAuth('$STARDOG_USER', '$STARDOG_PASSWORD')
+        response = post(
+            '$STARDOG_URL/update',
+            headers={'Content-Type': 'application/sparql-update'},
+            auth=auth,
+            data='CLEAR GRAPH <$TARGET_GRAPH>',
+            verify=False
+        )
+        response.raise_for_status()
+        print('Graph cleared')
+        "
+
+    - name: Upload to Stardog
+      env:
+        STARDOG_USER: ${{ secrets.STARDOG_USER }}
+        STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+      run: |
+        python -c "
+        from requests import post
+        from requests.auth import HTTPBasicAuth
+        with open('$OUTPUT_FILE', 'rb') as f:
+            response = post(
+                '$STARDOG_URL',
+                params={'graph': '$TARGET_GRAPH'},
+                headers={'Content-Type': 'text/turtle'},
+                auth=HTTPBasicAuth('$STARDOG_USER', '$STARDOG_PASSWORD'),
+                data=f,
+                verify=False
+            )
+        response.raise_for_status()
+        print('Upload successful')
+        "
+
+    - name: Archive results
+      uses: actions/upload-artifact@v4
+      with:
+        name: codelist-catalog
+        path: ${{ env.OUTPUT_FILE }}
