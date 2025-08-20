@@ -341,6 +341,7 @@ class CodeListManager:
             body_node = BNode()
             self.vm.graph.add((annotation_node, oa.hasBody, body_node))
 
+            first_text_added = False
             # Add text values if present
             for lang, text in text_data.items():
                 if is_valid_value(text):
@@ -573,3 +574,4 @@ class ConceptMetadataManager:
         if matching_levels:
             first_level_uri = URIRef(matching_levels[0]['uri'])
             self.vm.graph.add((all_uri, CUBELINK.nextInHierarchy, first_level_uri))
+
