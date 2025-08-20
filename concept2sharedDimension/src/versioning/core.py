@@ -346,7 +346,7 @@ class CodeListManager:
             for lang, text in text_data.items():
                 if is_valid_value(text):
                     if not first_text_added:
-                        self.vm.graph.add((body_node, RDF.type, URIref("http://www.w3.org/2011/content#ContentAsText")))
+                        self.vm.graph.add((body_node, RDF.type, URIRef("http://www.w3.org/2011/content#ContentAsText")))
                         self.vm.graph.add((body_node, DCTERMS.format, Literal("text/plain")))
                         first_text_added = True
                     self.vm.graph.add((body_node, RDF.value, Literal(text.strip(), lang=lang)))
@@ -574,4 +574,5 @@ class ConceptMetadataManager:
         if matching_levels:
             first_level_uri = URIRef(matching_levels[0]['uri'])
             self.vm.graph.add((all_uri, CUBELINK.nextInHierarchy, first_level_uri))
+
 
