@@ -6,7 +6,8 @@
 Concept_mapping/
 ├── src/
 │   ├── versioning/          
-│   │   ├── __init__.py      
+│   │   ├── __init__.py
+│   │   ├── config.py    
 │   │   ├── core.py      
 │   │   ├── processor.py   
 │   │   └── utils.py        
@@ -28,6 +29,10 @@ The main components are
 
 - Processing Flow (processor.py):
     - The VersionProcessor handles the version processing pipeline: for each version, it creates both identity (persistent) and version-specific objects
+      
+- utils.py: utility functions (API calls, ...)
+  
+- config.py: configuration file
       
 ## How to use the script
 
@@ -67,7 +72,7 @@ The authentication is done via github secrets STARDOG_USERNAME and STARDOG_PASSW
 
 ## LINDAS publication: some notes
 
-In this repository it's stored a Jupyter notebook named *stardog_queries_examples.ipynb* that contains some python examples that demonstrates how to make requests to the stardog database (upload, update, retrieve and delete). 
+In this repository it's stored a Jupyter notebook named [*stardog_queries_examples.ipynb*](https://github.com/I14Y-ch/LINDAS/blob/9675b7e044e4607322d0e67806172c5d66ae2ad7/stardog_queries_examples.ipynb) that contains some python examples that demonstrates how to make requests to the stardog database (upload, update, retrieve and delete). 
 
 LINDAS uses three environement for different workflow stages:
 - TEST: Development & experimental work, BASE API URL: https://stardog-test.cluster.ldbar.ch/lindas
@@ -86,6 +91,7 @@ The URI created for the publication in RDF of I14Y concept is constructed as fol
 | Concept / Defined term set version |https://register.ld.admin.ch/i14y/[concept_identifier]/version/[version_number] | [concept name] + " (version " + [version number] ")"|
 | Code / Defined term identity |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier] | [code name] + " (identitiy)" |
 | Code / Defined term version |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier]/version/[version_number]| [code name] + " (version " + [version number] ")"|
+
 
 
 
