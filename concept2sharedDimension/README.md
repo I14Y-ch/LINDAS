@@ -22,6 +22,7 @@ The main components are
 
 - Core Modules (core.py):
     - GraphManager: Handles RDF graph creation and URI generation
+    - CatalogManager: describe the i14y catalog based on void
     - CodeListManager: Manages hierarchical code list structures and version-identity relationships
     - ConceptMetadataManager: Handles concept scheme metadata 
 
@@ -52,6 +53,7 @@ Update `config.py` with yours configuration data, in particular you need to set:
 **3. Run `main.py`.** 
 
 **Note for script future use**: To add the type SharedDimension to the Concepts autmatically via the script, uncomment the following line (inside the class `ConceptMetadataManager` and function `add_scheme_metadata`):
+
 ```
 self.vm.graph.add((uri, RDF.type, meta.SharedDimension))   
 
@@ -62,4 +64,28 @@ In the folder `.github/workflows` you can find the `main.yml` file with the istr
 The authentication is done via github secrets STARDOG_USERNAME and STARDOG_PASSWORD_TEST (the instructions are set for the test environement, if you want to change on prod you just need to modify:
 - the `STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'` in `env` (in the `main.yml` file)
 - the call for the right secret for `STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}`  (in the `main.yml` file) in the "Clear Stardog graph" step and "Upload to Stardog" step.
+
+## LINDAS publication: some notes
+
+In this repository it's stored a Jupyter notebook named *stardog_queries_examples.ipynb* that contains some python examples that demonstrates how to make requests to the stardog database (upload, update, retrieve and delete). 
+
+LINDAS uses three environement for different workflow stages:
+- TEST: Development & experimental work, BASE API URL: https://stardog-test.cluster.ldbar.ch/lindas
+- INT: Pre-production validation, BASE API URL: https://stardog-int.cluster.ldbar.ch/lindas	
+- PROD: Production, BASE API URL: https://stardog.cluster.ldbar.ch/lindas
+
+The i14y graph in which all data at the moment is published is: https://lindas.admin.ch/fso/i14y.
+
+## URI creation
+
+The URI created for the publication in RDF of I14Y concept is constructed as follow:
+
+| Object    | URI |  Name | 
+| -------- | ------- | ------- |
+| Concept / Defined term set identity |https://register.ld.admin.ch/i14y/[concept_identifier] | [concept name] + " (identitiy)"|
+| Concept / Defined term set version |https://register.ld.admin.ch/i14y/[concept_identifier]/version/[version_number] | [concept name] + " (version " + [version number] ")"|
+| Code / Defined term identity |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier] | [code name] + " (identitiy)" |
+| Code / Defined term version |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier]/version/[version_number]| [code name] + " (version " + [version number] ")"|
+
+
 
