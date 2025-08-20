@@ -7,7 +7,7 @@ USE_STATUSES = False  # Set to False to use concept_ids
 STATUSES = ['Standard', 'Qualified', 'PreferredStandard']
 
 # If using specific concept IDs
-CONCEPT_IDS = ['08dd28d2-a693-5049-a3fe-0ee83005b61b']
+CONCEPT_IDS = ['08dd28d2-a693-5049-a3fe-0ee83005b61b', '08dceec4-b3f0-1285-b8d0-b005fabcf87c']
 
 # Output file name
 OUTPUT_FILE_NAME = "output.ttl"
@@ -33,3 +33,4 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
