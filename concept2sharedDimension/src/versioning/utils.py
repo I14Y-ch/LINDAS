@@ -71,9 +71,6 @@ def get_all_concepts(registration_statuses=None):
     if registration_statuses is None:
         registration_statuses = ['Standard', 'Qualified', 'PreferredStandard']
 
-    # ecluded concepts: municipalities and job titles 
-    EXCLUDED_IDS = {""}
-
     page = 1
     while True:
         params = {
@@ -195,4 +192,5 @@ class VersionDiff:
     # def is_newer_version(current_version, existing_version):
     #     """Compare version strings to determine which is newer"""
     #     from packaging import version
+
     #     return version.parse(current_version) > version.parse(existing_version)
