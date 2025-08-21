@@ -6,6 +6,9 @@ USE_STATUSES = False  # Set to False to use concept_ids
 # If using statuses
 STATUSES = ['Standard', 'Qualified', 'PreferredStandard']
 
+#Use this variable to esclude specific Ids: 
+EXCLUDED_IDS = ["08d92cdc-4e4a-5b21-9e0e-a50ffe3f4a16", "08d92cdc-03c1-103f-8fec-a24aafeaedd3", "08da9d6a-bc1f-d917-bb12-5c78e7b8bc0f", "08dceec4-b3f0-1285-b8d0-b005fabcf87c"]
+
 # If using specific concept IDs
 CONCEPT_IDS = ['08dd28d2-a693-5049-a3fe-0ee83005b61b']
 
@@ -33,5 +36,6 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
 
 
