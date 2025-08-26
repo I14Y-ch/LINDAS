@@ -3,27 +3,35 @@ from .config import *
 from rdflib import Literal 
 
 def get_concept_data(concept_id):
-    """Get combined concept metadata and codelist entries in the legacy format"""
+    """Get combined concept metadata and codelist entries with proper error handling"""
     try:
-        # Get concept metadata
+        session = create_session()
+        
+        # Get concept metadata with timeout
         meta_url = f"{BASE_API_URL}{concept_id}"
-        meta_response = r.get(meta_url, verify=False)
+        meta_response = session.get(meta_url, timeout=30, verify=False)
         meta_response.raise_for_status()
         concept_data = meta_response.json()['data']
         
-        # Get codelist entries (if it's a CodeList concept)
+        # Get codelist entries (if it's a CodeList concept) with timeout
         if concept_data.get('conceptType') == 'CodeList':
-            entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/json"
-            entries_response = r.get(entries_url, verify=False)
-            entries_response.raise_for_status()
-            concept_data['codeListEntries'] = entries_response.json()['data']
+            try:
+                entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/json"
+                entries_response = session.get(entries_url, timeout=60, verify=False)
+                entries_response.raise_for_status()
+                concept_data['codeListEntries'] = entries_response.json()['data']
+            except Exception as e:
+                print(f"WARNING: Could not fetch codelist entries for {concept_id}: {str(e)}")
+                # Continue without codelist entries rather than failing completely
+                concept_data['codeListEntries'] = []
         
-        # Return in legacy format
         return {'data': concept_data}
     
     except Exception as e:
-        print(f"Error fetching concept data for {concept_id}: {str(e)}")
-        raise
+        print(f"WARNING: Error fetching concept data for {concept_id}: {str(e)}")
+        # Return None to indicate failure, but don't raise exception
+        return None
+
 def get_version_list(concept_identifier):
     """Get list of versions using the filter approach"""
     try:
@@ -194,3 +202,4 @@ class VersionDiff:
     #     from packaging import version
 
     #     return version.parse(current_version) > version.parse(existing_version)
+
