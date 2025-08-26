@@ -3,34 +3,27 @@ from .config import *
 from rdflib import Literal 
 
 def get_concept_data(concept_id):
-    """Get combined concept metadata and codelist entries with proper error handling"""
+    """Get combined concept metadata and codelist entries"""
     try:
-        session = create_session()
-        
-        # Get concept metadata with timeout
+        # Get concept metadata
         meta_url = f"{BASE_API_URL}{concept_id}"
-        meta_response = session.get(meta_url, timeout=30, verify=False)
+        meta_response = r.get(meta_url, verify=False)
         meta_response.raise_for_status()
         concept_data = meta_response.json()['data']
         
-        # Get codelist entries (if it's a CodeList concept) with timeout
+        # Get codelist entries (if it's a CodeList concept)
         if concept_data.get('conceptType') == 'CodeList':
-            try:
-                entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/json"
-                entries_response = session.get(entries_url, timeout=60, verify=False)
-                entries_response.raise_for_status()
-                concept_data['codeListEntries'] = entries_response.json()['data']
-            except Exception as e:
-                print(f"WARNING: Could not fetch codelist entries for {concept_id}: {str(e)}")
-                # Continue without codelist entries rather than failing completely
-                concept_data['codeListEntries'] = []
+            entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/json"
+            entries_response = r.get(entries_url, verify=False)
+            entries_response.raise_for_status()
+            concept_data['codeListEntries'] = entries_response.json()['data']
         
+        # Return in legacy format
         return {'data': concept_data}
     
     except Exception as e:
-        print(f"WARNING: Error fetching concept data for {concept_id}: {str(e)}")
-        # Return None to indicate failure, but don't raise exception
-        return None
+        print(f"Error fetching concept data for {concept_id}: {str(e)}")
+        raise
 
 def get_version_list(concept_identifier):
     """Get list of versions using the filter approach"""
@@ -59,9 +52,19 @@ def get_version_list(concept_identifier):
         sorted_versions = sorted(versions, key=lambda x: x['validFrom'])
         
         version_data = []
+        failed_concepts = []
+        
         for version in sorted_versions:
-            data = get_concept_data(version['id'])
-            version_data.append(data["data"])
+            try:
+                data = get_concept_data(version['id'])
+                version_data.append(data["data"])
+            except Exception as e:
+                failed_concepts.append(version['id'])
+                print(f"Warning: Failed to retrieve concept {version['id']}, continuing with other versions: {str(e)}")
+        
+        # Give warning if any concepts failed to retrieve
+        if failed_concepts:
+            print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved: {', '.join(failed_concepts)}")
         
         return version_data
 
@@ -69,12 +72,12 @@ def get_version_list(concept_identifier):
         print(f"Error fetching versions for {concept_identifier}: {str(e)}")
         raise
 
-
 def get_all_concepts(registration_statuses=None):
     """Get all CodeList concepts with specified registration statuses"""
     base_url = f"{BASE_API_URL}"
     all_concepts = []
     printed_count = 0  
+    failed_concepts = []
 
     if registration_statuses is None:
         registration_statuses = ['Standard', 'Qualified', 'PreferredStandard']
@@ -114,9 +117,12 @@ def get_all_concepts(registration_statuses=None):
             break
             
         page += 1
+    
+    # Give warning if any concepts failed during processing
+    if failed_concepts:
+        print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}")
                 
     return all_concepts
-
 
 def is_valid_value(value):
     """check for multilingual field if the value is not empty"""
@@ -124,7 +130,6 @@ def is_valid_value(value):
         return False
     clean_value = str(value).strip().upper()
     return clean_value and clean_value not in {"NA", "N/A", "-", "NULL", "NONE"}
-
 
 class VersionDiff:
     @staticmethod
@@ -202,4 +207,5 @@ class VersionDiff:
     #     from packaging import version
 
     #     return version.parse(current_version) > version.parse(existing_version)
+
 
