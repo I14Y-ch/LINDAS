@@ -3,7 +3,7 @@ from .config import *
 from rdflib import Literal 
 
 def get_concept_data(concept_id):
-    """Get combined concept metadata and codelist entries"""
+    """Get combined concept metadata and codelist entries in the legacy format"""
     try:
         # Get concept metadata
         meta_url = f"{BASE_API_URL}{concept_id}"
@@ -22,8 +22,8 @@ def get_concept_data(concept_id):
         return {'data': concept_data}
     
     except Exception as e:
-        print(f"Error fetching concept data for {concept_id}: {str(e)}")
-        raise
+        print(f"Warning: Error fetching concept data for {concept_id}: {str(e)}")
+        return None  # Return None instead of raising exception
 
 def get_version_list(concept_identifier):
     """Get list of versions using the filter approach"""
@@ -55,16 +55,15 @@ def get_version_list(concept_identifier):
         failed_concepts = []
         
         for version in sorted_versions:
-            try:
-                data = get_concept_data(version['id'])
+            data = get_concept_data(version['id'])
+            if data is not None:
                 version_data.append(data["data"])
-            except Exception as e:
+            else:
                 failed_concepts.append(version['id'])
-                print(f"Warning: Failed to retrieve concept {version['id']}, continuing with other versions: {str(e)}")
         
         # Give warning if any concepts failed to retrieve
         if failed_concepts:
-            print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved: {', '.join(failed_concepts)}")
+            print(f"Warning: {len(failed_concepts)} concept version(s) could not be retrieved: {', '.join(failed_concepts)}")
         
         return version_data
 
@@ -207,5 +206,6 @@ class VersionDiff:
     #     from packaging import version
 
     #     return version.parse(current_version) > version.parse(existing_version)
+
 
 
