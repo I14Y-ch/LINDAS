@@ -1,11 +1,11 @@
 from rdflib import Namespace
 
 # Toggle between using statuses or concept_ids
-USE_STATUSES = False # Set to False to use concept_ids
+USE_STATUSES = True # Set to False to use concept_ids
 
 # If using statuses
 # One of the following: Candidate, Recorded, Qualified, Standard, PreferredStandard, Superseded, Retired
-STATUSES = ["Candidate"]
+STATUSES = ["Recorded"]
 
 #Use this variable to esclude specific Ids: 
 # 21.08.2025: I have removed NOGA single hierarchy concepts (NOGA Section, ...) they are duplicates of NOGA
@@ -92,6 +92,7 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
 
 
 
