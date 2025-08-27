@@ -3,7 +3,7 @@ from .config import *
 from rdflib import Literal 
 
 def get_concept_data(concept_id):
-    """Get combined concept metadata and codelist entries in the legacy format"""
+    """Get combined concept metadata and codelist entries"""
     try:
         # Get concept metadata
         meta_url = f"{BASE_API_URL}{concept_id}"
@@ -100,6 +100,7 @@ def get_all_concepts(registration_statuses=None):
             c for c in data 
             if (c.get('conceptType') == 'CodeList' 
                 and c.get('registrationStatus') in registration_statuses
+                and c.get('identifier') not "2.16.756.5.30.1.127.3.10.13.1"
                 and c.get('id') not in EXCLUDED_IDS)
         ]
 
@@ -206,6 +207,7 @@ class VersionDiff:
     #     from packaging import version
 
     #     return version.parse(current_version) > version.parse(existing_version)
+
 
 
 
