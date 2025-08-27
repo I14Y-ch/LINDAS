@@ -2,7 +2,7 @@ name: Weekly Concept2Lindas Update
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # 00:00 every Monday
+    - cron: '0 0 * * 1'  # 00:00 every Monday :cite[4]:cite[10]
   workflow_dispatch:
 
 env:
@@ -169,23 +169,23 @@ jobs:
           else
             cat "${files[@]}" > combined_output.ttl
             python - <<'PY'
-            import re
-            src = 'combined_output.ttl'
-            dst = 'final_output.ttl'
-            with open(src, 'r', encoding='utf-8') as f:
+          import re
+          src = 'combined_output.ttl'
+          dst = 'final_output.ttl'
+          with open(src, 'r', encoding='utf-8') as f:
               content = f.read()
-
-            prefixes = {}
-            other_lines = []
-            for line in content.splitlines():
+          
+          prefixes = {}
+          other_lines = []
+          for line in content.splitlines():
               if line.strip().startswith('@prefix'):
-                m = re.match(r'@prefix\s+(\S+)\s+<[^>]+>\s*\.\s*', line)
-                if m and m.group(1) not in prefixes:
-                  prefixes[m.group(1)] = line
+                  m = re.match(r'@prefix\s+(\S+)\s+<[^>]+>\s*\.\s*', line)
+                  if m and m.group(1) not in prefixes:
+                      prefixes[m.group(1)] = line
               else:
-                other_lines.append(line)
-
-            with open(dst, 'w', encoding='utf-8') as f:
+                  other_lines.append(line)
+          
+          with open(dst, 'w', encoding='utf-8') as f:
               f.write('\n'.join(prefixes.values()) + '\n\n')
               f.write('\n'.join(other_lines).strip() + '\n')
           PY
@@ -222,7 +222,7 @@ jobs:
               headers={'Content-Type': 'application/sparql-update'},
               auth=auth,
               data=f'CLEAR GRAPH <{target}>',
-              verify=False
+              verify=False  # Disables SSL certificate verification :cite[2]:cite[6]
           )
           r.raise_for_status()
           print('Graph cleared')
@@ -242,7 +242,7 @@ jobs:
             url = os.environ['STARDOG_URL']
             params = {'graph': os.environ['TARGET_GRAPH']}
             with open('final_output.ttl', 'rb') as f:
-              r = requests.post(url, params=params, headers={'Content-Type': 'text/turtle'}, auth=auth, data=f, verify=False)
+              r = requests.post(url, params=params, headers={'Content-Type': 'text/turtle'}, auth=auth, data=f, verify=False)  # Disables SSL certificate verification :cite[2]:cite[6]
             r.raise_for_status()
             print('Upload successful')
             PY
