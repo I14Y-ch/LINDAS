@@ -144,25 +144,9 @@ jobs:
           echo "Concept IDs: $BATCH_CONCEPT_IDS"
           echo "Batch size: ${{ steps.calc-batch.outputs.actual_batch_size }}"
           
-          python - <<'PY'
-          import os
-          from concept2sharedDimension.src.main import main
-          from concept2sharedDimension.src.versioning.config import CONCEPT_IDS
-
-          batch_ids_str = os.environ.get('BATCH_CONCEPT_IDS', '')
-          if batch_ids_str.strip():
-              batch_ids = [x.strip() for x in batch_ids_str.split(',') if x.strip()]
-              if batch_ids:
-                  print(f"Processing batch of {len(batch_ids)} concepts: {batch_ids[:3]}...")
-                  # Clear the config list and add our batch
-                  CONCEPT_IDS.clear()
-                  CONCEPT_IDS.extend(batch_ids)
-                  main()
-              else:
-                  print("No valid concept IDs in batch")
-          else:
-              print("Empty batch - skipping")
-          PY
+          # Run the main script with the environment variable set
+          # The updated main.py will prioritize BATCH_CONCEPT_IDS environment variable
+          python -m concept2sharedDimension.src.main --batch-index ${{ matrix.batch_index }}
 
       - name: Upload batch artifact
         uses: actions/upload-artifact@v4
@@ -282,7 +266,7 @@ jobs:
           try:
               g = Graph()
               g.parse('final_output.ttl', format='turtle')
-              print(f'Validated combined RDF with {len(g)} triples')
+              print(f'✓ Validated combined RDF with {len(g)} triples')
               
               # Count concepts for verification
               from rdflib.namespace import RDF
@@ -293,15 +277,15 @@ jobs:
               identities = len(list(g.subjects(RDF.type, SDO.DefinedTermSet)))
               versions = len(list(g.subjects(RDF.type, vl.Version)))
               
-              print(f'Found {identities} total DefinedTermSet objects')
-              print(f'Found {versions} version objects')
+              print(f'✓ Found {identities} total DefinedTermSet objects')
+              print(f'✓ Found {versions} version objects')
               
           except Exception as e:
-              print(f'RDF validation failed: {e}')
+              print(f'✗ RDF validation failed: {e}')
               sys.exit(1)
           PY
           else
-            echo "final_output.ttl is empty; skipping validation."
+            echo "⚠ final_output.ttl is empty; skipping validation."
           fi
 
       - name: Clear Stardog Graph
@@ -324,7 +308,7 @@ jobs:
               verify=False
           )
           r.raise_for_status()
-          print('Graph cleared successfully')
+          print('✓ Graph cleared successfully')
           PY
 
       - name: Upload to Stardog
@@ -352,10 +336,10 @@ jobs:
                 verify=False
             )
             r.raise_for_status()
-            print('Upload successful')
+            print('✓ Upload successful')
           PY
           else
-            echo "No data to upload - final_output.ttl is empty"
+            echo "⚠ No data to upload - final_output.ttl is empty"
           fi  
 
       - name: Archive final results
