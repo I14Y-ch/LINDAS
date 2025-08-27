@@ -1,9 +1,9 @@
 import argparse
 import sys
-from versioning import VersionProcessor, CatalogManager
-from versioning.config import *
+from .versioning import VersionProcessor, CatalogManager
+from .versioning.config import *
 import warnings
-from versioning.utils import get_all_concepts  
+from .versioning.utils import get_all_concepts  
 from urllib3.exceptions import InsecureRequestWarning
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 from rdflib import RDF
@@ -70,6 +70,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
