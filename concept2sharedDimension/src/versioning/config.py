@@ -66,54 +66,6 @@ CONCEPT_IDS = [
   "08dd87e4-2729-7764-a0ce-758107bab20d",
   "08dd72b9-faa1-28e3-a7a8-fd3234a7ce9a",
   "08dca1a3-c2c7-14c5-b70e-3f784356c235",
-  "08dc5ea5-c4ea-ef10-81db-d77b9d1d47b9",
-  "08d9407c-8319-7542-848f-29f7c94368da",
-  "08d9407c-88f5-81a3-9b49-5a0e52dcd7b3",
-  "08db76ea-fb32-07de-b24a-a5ed4f4f375d",
-  "08db76ea-fe40-252a-bdae-ff923897c0ca",
-  "08db76ea-ff1e-eaae-b90e-9e9e931e4960",
-  "08db76ea-fdb5-5c39-9897-530d11869ed2",
-  "08d97de1-8fee-8bb5-b31d-dc08f36e84f6",
-  "08db76eb-07b5-5822-ad05-304bb42ea7d2",
-  "08db76eb-0734-1d8e-9750-c27d221f28c0",
-  "08da39b0-0b59-6998-92c5-025dbc4aa744",
-  "08d97e99-9267-f800-9cc4-8f9e9860f728",
-  "08db358d-0e60-5412-9a53-e10ff2933aa0",
-  "08dd2e3a-d99e-d56f-9c1c-5a7c5733f1a6",
-  "08dcecf6-bc5a-ba99-9dc3-7fff9b8b3752",
-  "08dc1121-4ee7-5439-8f9e-cb37db77c486",
-  "08da5e98-50b3-dba1-bb9b-e48eeabaf216",
-  "08da3a56-dc1a-d2da-8520-9d913cfafa3c",
-  "08da3a59-0b66-e5e9-b59e-37788df1beff",
-  "08da3a5a-beac-d73c-9483-021a7fc448bb",
-  "08da3a59-f28a-26ef-9414-c8d78b5bb1ec",
-  "08da58dc-4dc8-f9cb-b6f2-7d16b3fa0cde",
-  "08d97e9a-6563-0f72-afe7-5015064bdd8b",
-  "08da3a5b-424b-8670-9e9d-24729916e767",
-  "08db76eb-06da-3458-8639-7c9ee7439106",
-  "08db76eb-0636-4af6-9c79-f2abbec942eb",
-  "08db76ea-f888-191e-9ab0-0fb5c32f90c3",
-  "08db76ea-f939-b5dc-a7fd-a2e7edef7bfa",
-  "08db76ea-f9df-ec08-9d7a-29e5a5222d43",
-  "08db76eb-19b4-1ef1-8bed-455e077ec046",
-  "08da3a5b-ed75-c5fa-a5f4-daeb750e41ca",
-  "08da3c7b-da84-fa5f-992b-1b02fe06ecb6",
-  "08d97e9c-4604-aebb-b81d-d2ade3ca67f5",
-  "08da2469-30c0-08a4-9cec-0111ba31a20e",
-  "08d97de2-3ad9-47ab-b379-eaa2566abba3",
-  "08d97ea0-40aa-c153-a614-31c2362cd9e4",
-  "08d97eaa-595c-b452-b483-c00c9732ea46",
-  "08d97ea1-2bcf-effe-9851-1e82a7cce3bf",
-  "08d97ea2-617d-3dc5-b876-5e466b5e6858",
-  "08d97eab-99be-1402-8079-f4879ff60dc0",
-  "08da3c7c-f914-206d-a433-5819a4911413",
-  "08db76eb-1b4d-a6fe-82ac-0f6b1eb7f0c8",
-  "08db76ea-fc6b-27a9-8430-16d4e8e9a756",
-  "08db76ea-fb7e-03a5-af86-56f1dcd65a39",
-  "08db0288-0e2c-bd20-82f9-0946e80c8bdd",
-  "08dd2e54-00fb-efc5-b7cd-14f5c7d2272d",
-  "08dc27c5-dcf1-8d73-9379-12b31beae206",
-  "08da3c7e-2594-9e3d-88f9-df313b9f7d4b"
 ]
 
 # Output file name
@@ -140,6 +92,7 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
 
 
 
