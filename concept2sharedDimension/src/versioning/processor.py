@@ -40,6 +40,9 @@ class VersionProcessor:
         
         concept_identifier = concept_meta["data"].get("identifier")
         version_data = get_version_list(concept_identifier)
+        if not version_data:
+            print(f"Skipping concept {concept_identifier}, no version data")
+            return
         
         if not version_data:
             raise ValueError("No version data found")
@@ -147,3 +150,4 @@ class VersionProcessor:
             next_version_uri = self.vm.create_uri(version_data['identifier'], version=next_version_data['version'])
             self.vm.graph.add((version_uri, vl.successor, next_version_uri))
             self.vm.graph.add((next_version_uri, vl.predecessor, version_uri))
+
