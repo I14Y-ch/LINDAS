@@ -196,14 +196,14 @@ jobs:
         run: |
           if [ -s final_output.ttl ]; then
             python - <<'PY'
-            from rdflib import Graph
-            g = Graph()
-            g.parse('final_output.ttl', format='turtle')
-            print(f'Validated combined RDF with {len(g)} triples')
+          from rdflib import Graph
+          g = Graph()
+          g.parse('final_output.ttl', format='turtle')
+          print(f'Validated combined RDF with {len(g)} triples')
           PY
-          else
-            echo "final_output.ttl is empty; skipping validation."
-          fi
+              else
+                echo "final_output.ttl is empty; skipping validation."
+              fi
 
       - name: Clear Stardog Graph
         env:
@@ -236,17 +236,17 @@ jobs:
         run: |
           if [ -s final_output.ttl ]; then
             python - <<'PY'
-            import os, warnings, requests
-            warnings.filterwarnings("ignore")
-            auth = requests.auth.HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-            url = os.environ['STARDOG_URL']
-            params = {'graph': os.environ['TARGET_GRAPH']}
-            with open('final_output.ttl', 'rb') as f:
-              r = requests.post(url, params=params, headers={'Content-Type': 'text/turtle'}, auth=auth, data=f, verify=False)  # Disables SSL certificate verification :cite[2]:cite[6]
+          import os, warnings, requests
+          warnings.filterwarnings("ignore")
+          auth = requests.auth.HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+          url = os.environ['STARDOG_URL']
+          params = {'graph': os.environ['TARGET_GRAPH']}
+          with open('final_output.ttl', 'rb') as f:
+            r = requests.post(url, params=params, headers={'Content-Type': 'text/turtle'}, auth=auth, data=f, verify=False)  # Disables SSL certificate verification :cite[2]:cite[6]
             r.raise_for_status()
             print('Upload successful')
           PY
-          fi
+          fi  
 
       - name: Archive final results
         uses: actions/upload-artifact@v4
