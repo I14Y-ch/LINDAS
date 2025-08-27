@@ -200,7 +200,7 @@ jobs:
             g = Graph()
             g.parse('final_output.ttl', format='turtle')
             print(f'Validated combined RDF with {len(g)} triples')
-            PY
+          PY
           else
             echo "final_output.ttl is empty; skipping validation."
           fi
@@ -245,9 +245,7 @@ jobs:
               r = requests.post(url, params=params, headers={'Content-Type': 'text/turtle'}, auth=auth, data=f, verify=False)  # Disables SSL certificate verification :cite[2]:cite[6]
             r.raise_for_status()
             print('Upload successful')
-            PY
-          else
-            echo "final_output.ttl is empty; skipping upload."
+          PY
           fi
 
       - name: Archive final results
