@@ -134,7 +134,7 @@ jobs:
         if: always()
         with:
           name: batch-${{ matrix.batch_index }}-output
-          path: noga_output.ttl   # adjust if your tool writes a different filename
+          path: ${{ env.OUTPUT_FILE }}
           if-no-files-found: warn
 
   combine-and-upload:
@@ -181,7 +181,7 @@ jobs:
             with open(dst, 'w', encoding='utf-8') as f:
               f.write('\n'.join(prefixes.values()) + '\n\n')
               f.write('\n'.join(other_lines).strip() + '\n')
-            PY
+          PY
           fi
 
       - name: Validate combined RDF
