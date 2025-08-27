@@ -2,183 +2,250 @@ name: Weekly Concept2Lindas Update
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # Runs at 00:00 every Monday
+    - cron: '0 0 * * 1'  # 00:00 every Monday
   workflow_dispatch:
 
 env:
   PYTHON_VERSION: '3.10'
   STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
-  BATCH_SIZE: 30
+  BATCH_SIZE: '30'  # strings in env; cast to int in code
 
 jobs:
   get-concepts:
     runs-on: ubuntu-latest
     outputs:
       concept_ids: ${{ steps.get-concepts.outputs.concept_ids }}
-      total_batches: ${{ steps.calculate-batches.outputs.total_batches }}
-    
+      total_concepts: ${{ steps.get-concepts.outputs.total_concepts }}
+      batch_matrix: ${{ steps.get-concepts.outputs.batch_matrix }}
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install rdflib requests
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install rdflib requests
 
-    - name: Get all concept IDs
-      id: get-concepts
-      run: |
-        python -c "
-        from src.versioning.utils import get_all_concepts
-        from src.versioning.config import STATUSES
-        concepts = get_all_concepts(STATUSES)
-        concept_ids = [c['id'] for c in concepts]
-        print('Total concepts found:', len(concept_ids))
-        print('::set-output name=concept_ids::' + ','.join(concept_ids))
-        "
+      - name: Get all concept IDs + build matrix
+        id: get-concepts
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from concept2sharedDimension.src.versioning.utils import get_all_concepts
+          from concept2sharedDimension.src.versioning.config import STATUSES
 
-    - name: Calculate total batches needed
-      id: calculate-batches
-      run: |
-        CONCEPT_IDS='${{ steps.get-concepts.outputs.concept_ids }}'
-        IFS=',' read -ra ID_ARRAY <<< "$CONCEPT_IDS"
-        TOTAL_CONCEPTS=${#ID_ARRAY[@]}
-        BATCH_SIZE=${{ env.BATCH_SIZE }}
-        TOTAL_BATCHES=$(( (TOTAL_CONCEPTS + BATCH_SIZE - 1) / BATCH_SIZE ))
-        echo "Total concepts: $TOTAL_CONCEPTS"
-        echo "Total batches needed: $TOTAL_BATCHES"
-        echo "::set-output name=total_batches::$TOTAL_BATCHES"
+          concepts = get_all_concepts(STATUSES)
+          ids = [c['id'] for c in concepts]
+          print(f"Total concepts found: {len(ids)}")
 
-  process-batches-sequential:
+          batch_size = int(os.environ.get('BATCH_SIZE','30'))
+          n_batches = (len(ids) + batch_size - 1) // batch_size
+          # Run at least one empty batch so downstream jobs execute cleanly.
+          matrix = {"include": [{"batch_index": i} for i in range(max(1, n_batches))]}
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as gh:
+            print(f"concept_ids={','.join(ids)}", file=gh)
+            print(f"total_concepts={len(ids)}", file=gh)
+            print(f"batch_matrix={json.dumps(matrix)}", file=gh)
+          PY
+
+  process-batches:
     needs: get-concepts
     runs-on: ubuntu-latest
-    timeout-minutes: 240  # Increase timeout for sequential processing
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.get-concepts.outputs.batch_matrix) }}
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install rdflib requests
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install rdflib requests
 
-    - name: Process all batches sequentially
-      env:
-        CONCEPT_IDS: ${{ needs.get-concepts.outputs.concept_ids }}
-        TOTAL_BATCHES: ${{ needs.get-concepts.outputs.total_batches }}
-      run: |
-        for ((batch_index=0; batch_index<$TOTAL_BATCHES; batch_index++)); do
-          echo "Processing batch $batch_index"
-          python src/main.py --batch-index $batch_index --batch-size ${{ env.BATCH_SIZE }}
-        done
+      - name: Calculate batch range
+        id: calc-batch
+        shell: bash
+        run: |
+          CONCEPT_IDS='${{ needs.get-concepts.outputs.concept_ids }}'
+          BATCH_SIZE=${{ env.BATCH_SIZE }}
+          BATCH_INDEX=${{ matrix.batch_index }}
 
-    - name: Upload all batch outputs
-      uses: actions/upload-artifact@v4
-      with:
-        name: all-batches
-        path: |
-          batch_*_output.ttl
-          output.ttl
+          IFS=',' read -ra ID_ARRAY <<< "$CONCEPT_IDS"
 
-  combine-results:
-    needs: process-batches-sequential
+          START=$((BATCH_INDEX * BATCH_SIZE))
+          END=$((START + BATCH_SIZE))
+
+          BATCH_IDS=""
+          for ((i=START; i<END && i<${#ID_ARRAY[@]}; i++)); do
+            if [ -n "$BATCH_IDS" ]; then
+              BATCH_IDS="$BATCH_IDS,${ID_ARRAY[i]}"
+            else
+              BATCH_IDS="${ID_ARRAY[i]}"
+            fi
+          done
+
+          {
+            echo "batch_ids=$BATCH_IDS"
+            echo "batch_start=$START"
+            if (( END > ${#ID_ARRAY[@]} )); then echo "batch_end=${#ID_ARRAY[@]}"; else echo "batch_end=$END"; fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Process batch ${{ steps.calc-batch.outputs.batch_start }}-${{ steps.calc-batch.outputs.batch_end }}
+        env:
+          BATCH_CONCEPT_IDS: ${{ steps.calc-batch.outputs.batch_ids }}
+        shell: bash
+        run: |
+          echo "Processing concepts: $BATCH_CONCEPT_IDS"
+          python - <<'PY'
+          import os
+          from concept2sharedDimension.src.main import main
+          from concept2sharedDimension.src.versioning.config import CONCEPT_IDS
+
+          batch_ids = [x.strip() for x in os.environ.get('BATCH_CONCEPT_IDS','').split(',') if x.strip()]
+          if batch_ids:
+              CONCEPT_IDS.clear()
+              CONCEPT_IDS.extend(batch_ids)
+              print(f"Processing batch of {len(batch_ids)} concepts")
+              main()
+          else:
+              print("No concepts in this batch")
+          PY
+
+      - name: Upload batch artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: batch-${{ matrix.batch_index }}-output
+          path: noga_output.ttl   # adjust if your tool writes a different filename
+          if-no-files-found: warn
+
+  combine-and-upload:
+    needs: [get-concepts, process-batches]
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Download all batch artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: batches/
-        pattern: all-batches
-        merge-multiple: true
+      - name: Download all batch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: batches
+          pattern: batch-*-output
+          merge-multiple: true
 
-    - name: Combine all RDF files
-      run: |
-        # Combine all batch files
-        cat batches/batch_*_output.ttl batches/output.ttl 2>/dev/null | grep -v "^@prefix" > combined_temp.ttl
-        
-        # Add prefixes from first file
-        head -n 20 batches/output.ttl | grep "^@prefix" > final_output.ttl
-        echo "" >> final_output.ttl
-        cat combined_temp.ttl >> final_output.ttl
-        rm combined_temp.ttl
-        
-        echo "Combined RDF file created"
+      - name: Combine RDF files
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(batches/*.ttl)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No TTL files found; creating empty final_output.ttl"
+            : > final_output.ttl
+          else
+            cat "${files[@]}" > combined_output.ttl
+            python - <<'PY'
+            import re
+            src = 'combined_output.ttl'
+            dst = 'final_output.ttl'
+            with open(src, 'r', encoding='utf-8') as f:
+              content = f.read()
 
-    - name: Validate combined RDF
-      run: |
-        python -c "
-        from rdflib import Graph
-        g = Graph()
-        g.parse('final_output.ttl', format='turtle')
-        print(f'Validated combined RDF with {len(g)} triples')
-        "
+            prefixes = {}
+            other_lines = []
+            for line in content.splitlines():
+              if line.strip().startswith('@prefix'):
+                m = re.match(r'@prefix\s+(\S+)\s+<[^>]+>\s*\.\s*', line)
+                if m and m.group(1) not in prefixes:
+                  prefixes[m.group(1)] = line
+              else:
+                other_lines.append(line)
 
-    - name: Get OUTPUT_FILE_NAME from Python config
-      id: get-output-filename
-      run: |
-        OUTPUT_FILE=$(python -c "from src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
-        echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+            with open(dst, 'w', encoding='utf-8') as f:
+              f.write('\n'.join(prefixes.values()) + '\n\n')
+              f.write('\n'.join(other_lines).strip() + '\n')
+            PY
+          fi
 
-    - name: Clear Stardog Graph
-      env:
-        STARDOG_USER: ${{ secrets.STARDOG_USER }}
-        STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
-      run: |
-        python -c "
-        from requests import post
-        from requests.auth import HTTPBasicAuth
-        auth = HTTPBasicAuth('$STARDOG_USER', '$STARDOG_PASSWORD')
-        response = post(
-            '$STARDOG_URL/update',
-            headers={'Content-Type': 'application/sparql-update'},
-            auth=auth,
-            data='CLEAR GRAPH <$TARGET_GRAPH>',
-            verify=False
-        )
-        response.raise_for_status()
-        print('Graph cleared')
-        "
+      - name: Validate combined RDF
+        shell: bash
+        run: |
+          if [ -s final_output.ttl ]; then
+            python - <<'PY'
+            from rdflib import Graph
+            g = Graph()
+            g.parse('final_output.ttl', format='turtle')
+            print(f'Validated combined RDF with {len(g)} triples')
+            PY
+          else
+            echo "final_output.ttl is empty; skipping validation."
+          fi
 
-    - name: Upload to Stardog
-      env:
-        STARDOG_USER: ${{ secrets.STARDOG_USER }}
-        STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
-      run: |
-        python -c "
-        from requests import post
-        from requests.auth import HTTPBasicAuth
-        with open('final_output.ttl', 'rb') as f:
-            response = post(
-                '$STARDOG_URL',
-                params={'graph': '$TARGET_GRAPH'},
-                headers={'Content-Type': 'text/turtle'},
-                auth=HTTPBasicAuth('$STARDOG_USER', '$STARDOG_PASSWORD'),
-                data=f,
-                verify=False
-            )
-        response.raise_for_status()
-        print('Upload successful')
-        "
+      - name: Clear Stardog Graph
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, warnings, requests
+          warnings.filterwarnings("ignore")
+          auth = requests.auth.HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+          url = os.environ['STARDOG_URL'].rstrip('/') + '/update'
+          target = os.environ['TARGET_GRAPH']
+          r = requests.post(
+              url,
+              headers={'Content-Type': 'application/sparql-update'},
+              auth=auth,
+              data=f'CLEAR GRAPH <{target}>',
+              verify=False
+          )
+          r.raise_for_status()
+          print('Graph cleared')
+          PY
 
-    - name: Archive final results
-      uses: actions/upload-artifact@v4
-      with:
-        name: final-codelist-catalog
-        path: final_output.ttl
+      - name: Upload to Stardog
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+        shell: bash
+        run: |
+          if [ -s final_output.ttl ]; then
+            python - <<'PY'
+            import os, warnings, requests
+            warnings.filterwarnings("ignore")
+            auth = requests.auth.HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+            url = os.environ['STARDOG_URL']
+            params = {'graph': os.environ['TARGET_GRAPH']}
+            with open('final_output.ttl', 'rb') as f:
+              r = requests.post(url, params=params, headers={'Content-Type': 'text/turtle'}, auth=auth, data=f, verify=False)
+            r.raise_for_status()
+            print('Upload successful')
+            PY
+          else
+            echo "final_output.ttl is empty; skipping upload."
+          fi
+
+      - name: Archive final results
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-codelist-catalog
+          path: final_output.ttl
+          if-no-files-found: error
