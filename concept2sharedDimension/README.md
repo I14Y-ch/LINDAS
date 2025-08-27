@@ -66,9 +66,50 @@ self.vm.graph.add((uri, RDF.type, meta.SharedDimension))
 ## github Action - workflow
 In the folder `.github/workflows` you can find the `main.yml` file with the istructions to automatically update the I14Y graph on LINDAS. At the moment (31.07.2025) the synchronisation takes place automatically every week (monday at midnight). Synchronisation can also be triggered manually if necessary. 
 
-The authentication is done via github secrets STARDOG_USERNAME and STARDOG_PASSWORD_TEST (the instructions are set for the test environement, if you want to change on prod you just need to modify:
-- the `STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'` in `env` (in the `main.yml` file)
-- the call for the right secret for `STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}`  (in the `main.yml` file) in the "Clear Stardog graph" step and "Upload to Stardog" step.
+### Workflow Logic
+
+1. **Get Concepts Job** (`get-concepts`):
+   - Retrieves all concept IDs the specified statuses
+   - Calculates the number of batches needed based on the `BATCH_SIZE` environment variable
+   - Creates a job matrix for parallel processing of batches
+   - Outputs the list of concept IDs and batch configuration
+
+2. **Process Batches Job** (`process-batches`):
+   - Processes concepts to generate RDF triples in Turtle format
+   - Uploads each batch's output as a separate artifact for later combination
+
+3. **Combine and Upload Job** (`combine-and-upload`):
+   - Downloads all batch artifacts after all batches complete
+   - Combines the RDF files from all batches into a single file
+   - Handles RDF prefix deduplication to ensure valid Turtle syntax
+   - Clears the existing Stardog graph
+   - Uploads the combined RDF data to the target Stardog graph
+
+### Environment Configuration
+
+The authentication is done via GitHub secrets `STARDOG_USERNAME` and `STARDOG_PASSWORD_TEST`. The instructions are set for the test environment. To change to production:
+
+1. Modify the `STARDOG_URL` in the `env` section of `main.yml`:
+   ```yaml
+   env:
+     STARDOG_URL: 'https://stardog-prod.cluster.ldbar.ch/lindas'  # Change from test to prod
+   ```
+
+2. Update the password secret references in both the "Clear Stardog Graph" and "Upload to Stardog" steps:
+   ```yaml
+   env:
+     STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}  # Change from TEST to PROD
+   ```
+
+### Customization
+
+You can adjust the batch size by modifying the `BATCH_SIZE` environment variable:
+```yaml
+env:
+  BATCH_SIZE: '30'  # Increase for fewer larger batches, decrease for more smaller batches
+```
+
+The status filter for concepts can be modified in the Python configuration to control which concepts are processed.
 
 ## LINDAS publication: some notes
 
@@ -91,6 +132,7 @@ The URI created for the publication in RDF of I14Y concept is constructed as fol
 | Concept / Defined term set version |https://register.ld.admin.ch/i14y/[concept_identifier]/version/[version_number] | [concept name] + " (version " + [version number] ")"|
 | Code / Defined term identity |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier] | [code name] + " (identitiy)" |
 | Code / Defined term version |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier]/version/[version_number]| [code name] + " (version " + [version number] ")"|
+
 
 
 
