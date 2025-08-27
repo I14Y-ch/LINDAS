@@ -34,6 +34,13 @@ jobs:
           pip install -r requirements.txt
           pip install rdflib requests
 
+      - name: Get OUTPUT_FILE_NAME from Python config
+        id: get-output-filename
+        run: |
+          OUTPUT_FILE=$(python -c "from concept2sharedDimension.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
+          echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+          echo "filename=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
       - name: Get all concept IDs + build matrix
         id: get-concepts
         shell: bash
