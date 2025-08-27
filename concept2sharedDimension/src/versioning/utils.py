@@ -100,7 +100,7 @@ def get_all_concepts(registration_statuses=None):
             c for c in data 
             if (c.get('conceptType') == 'CodeList' 
                 and c.get('registrationStatus') in registration_statuses
-                and c.get('identifier') not "2.16.756.5.30.1.127.3.10.13.1"
+                and c.get('identifier')  != "2.16.756.5.30.1.127.3.10.13.1"
                 and c.get('id') not in EXCLUDED_IDS)
         ]
 
@@ -207,6 +207,7 @@ class VersionDiff:
     #     from packaging import version
 
     #     return version.parse(current_version) > version.parse(existing_version)
+
 
 
 
