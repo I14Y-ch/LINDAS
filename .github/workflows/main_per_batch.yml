@@ -18,6 +18,7 @@ jobs:
       concept_ids: ${{ steps.get-concepts.outputs.concept_ids }}
       total_concepts: ${{ steps.get-concepts.outputs.total_concepts }}
       batch_matrix: ${{ steps.get-concepts.outputs.batch_matrix }}
+      output_file: ${{ steps.get-output-filename.outputs.filename }}
 
     steps:
       - name: Checkout repository
@@ -38,7 +39,6 @@ jobs:
         id: get-output-filename
         run: |
           OUTPUT_FILE=$(python -c "from concept2sharedDimension.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
-          echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
           echo "filename=$OUTPUT_FILE" >> $GITHUB_OUTPUT
 
       - name: Get all concept IDs + build matrix
