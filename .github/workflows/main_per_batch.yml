@@ -141,7 +141,7 @@ jobs:
         if: always()
         with:
           name: batch-${{ matrix.batch_index }}-output
-          path: ${{ env.OUTPUT_FILE }}
+          path: ${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
 
   combine-and-upload:
