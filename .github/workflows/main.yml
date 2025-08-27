@@ -9,14 +9,10 @@ env:
   PYTHON_VERSION: '3.10'
   STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
-  BATCH_SIZE: 30  # Process 30 concepts per batch
 
 jobs:
-  get-concepts:
+  update-codelists:
     runs-on: ubuntu-latest
-    outputs:
-      concept_ids: ${{ steps.get-concepts.outputs.concept_ids }}
-      total_concepts: ${{ steps.get-concepts.outputs.total_concepts }}
     
     steps:
     - name: Checkout repository
@@ -33,149 +29,24 @@ jobs:
         pip install -r requirements.txt
         pip install rdflib requests
 
-    - name: Get all concept IDs
-      id: get-concepts
+    - name: Get OUTPUT_FILE_NAME from Python config
+      id: get-output-filename
       run: |
-        python -c "
-        from concept2sharedDimension.src.versioning.utils import get_all_concepts
-        from concept2sharedDimension.src.versioning.config import STATUSES
-        concepts = get_all_concepts(STATUSES)
-        concept_ids = [c['id'] for c in concepts]
-        print('Total concepts found:', len(concept_ids))
-        print('::set-output name=concept_ids::' + ','.join(concept_ids))
-        print('::set-output name=total_concepts::' + str(len(concept_ids)))
-        "
+        OUTPUT_FILE=$(python -c "from concept2sharedDimension.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
+        echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+        echo "filename=$OUTPUT_FILE" >> $GITHUB_OUTPUT
 
-  process-batches:
-    needs: get-concepts
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        batch_index: ${{ fromJson(needs.get-concepts.outputs.total_concepts) == 0 ? [0] : range(0, ceil(fromJson(needs.get-concepts.outputs.total_concepts) / env.BATCH_SIZE)) }}
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install dependencies
+    - name: Process CodeLists
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install rdflib requests
+        python -m concept2sharedDimension.src.main
 
-    - name: Calculate batch range
-      id: calc-batch
-      run: |
-        CONCEPT_IDS='${{ needs.get-concepts.outputs.concept_ids }}'
-        BATCH_SIZE=${{ env.BATCH_SIZE }}
-        BATCH_INDEX=${{ matrix.batch_index }}
-        
-        # Split concept IDs into array
-        IFS=',' read -ra ID_ARRAY <<< "$CONCEPT_IDS"
-        
-        # Calculate start and end indices
-        START=$((BATCH_INDEX * BATCH_SIZE))
-        END=$((START + BATCH_SIZE))
-        
-        # Get batch of IDs
-        BATCH_IDS=""
-        for ((i=START; i<END && i<${#ID_ARRAY[@]}; i++)); do
-          if [ -n "$BATCH_IDS" ]; then
-            BATCH_IDS="$BATCH_IDS,${ID_ARRAY[i]}"
-          else
-            BATCH_IDS="${ID_ARRAY[i]}"
-          fi
-        done
-        
-        echo "batch_ids=$BATCH_IDS" >> $GITHUB_OUTPUT
-        echo "batch_start=$START" >> $GITHUB_OUTPUT
-        echo "batch_end=$((END > ${#ID_ARRAY[@]} ? ${#ID_ARRAY[@]} : END))" >> $GITHUB_OUTPUT
-
-    - name: Process batch ${{ steps.calc-batch.outputs.batch_start }}-${{ steps.calc-batch.outputs.batch_end }}
-      env:
-        BATCH_CONCEPT_IDS: ${{ steps.calc-batch.outputs.batch_ids }}
-      run: |
-        echo "Processing concepts: $BATCH_CONCEPT_IDS"
-        python -c "
-        import os
-        from concept2sharedDimension.src.main import main
-        from concept2sharedDimension.src.versioning.config import CONCEPT_IDS
-        
-        # Override config with batch IDs
-        batch_ids = os.environ.get('BATCH_CONCEPT_IDS', '').split(',')
-        batch_ids = [id.strip() for id in batch_ids if id.strip()]
-        
-        if batch_ids:
-            CONCEPT_IDS.clear()
-            CONCEPT_IDS.extend(batch_ids)
-            print(f'Processing batch of {len(batch_ids)} concepts')
-            main()
-        else:
-            print('No concepts in this batch')
-        "
-
-    - name: Upload batch artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: batch-${{ matrix.batch_index }}-output
-        path: ${{ fromJSON('["noga_output.ttl"]') }}  # Adjust to your actual output file name
-
-  combine-and-upload:
-    needs: [get-concepts, process-batches]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Download all batch artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: batches/
-        pattern: batch-*-output
-        merge-multiple: true
-
-    - name: Combine RDF files
-      run: |
-        # Combine all turtle files into one
-        cat batches/*.ttl > combined_output.ttl
-        
-        # Remove duplicate prefixes and headers if needed
-        python -c "
-        with open('combined_output.ttl', 'r') as f:
-            content = f.read()
-        
-        # Keep only the first occurrence of each prefix declaration
-        lines = content.split('\n')
-        prefixes = {}
-        other_lines = []
-        
-        for line in lines:
-            if line.strip().startswith('@prefix'):
-                parts = line.split()
-                if len(parts) >= 3 and parts[0] == '@prefix':
-                    prefix_name = parts[1]
-                    if prefix_name not in prefixes:
-                        prefixes[prefix_name] = line
-            else:
-                other_lines.append(line)
-        
-        # Write combined file
-        with open('final_output.ttl', 'w') as f:
-            f.write('\n'.join(prefixes.values()) + '\n\n')
-            f.write('\n'.join(other_lines))
-        "
-
-    - name: Validate combined RDF
+    - name: Validate RDF
       run: |
         python -c "
         from rdflib import Graph
         g = Graph()
-        g.parse('final_output.ttl', format='turtle')
-        print(f'Validated combined RDF with {len(g)} triples')
+        g.parse('$OUTPUT_FILE', format='turtle')
+        print(f'Validated RDF with {len(g)} triples')
         "
 
     - name: Clear Stardog Graph
@@ -206,7 +77,7 @@ jobs:
         python -c "
         from requests import post
         from requests.auth import HTTPBasicAuth
-        with open('final_output.ttl', 'rb') as f:
+        with open('$OUTPUT_FILE', 'rb') as f:
             response = post(
                 '$STARDOG_URL',
                 params={'graph': '$TARGET_GRAPH'},
@@ -219,8 +90,8 @@ jobs:
         print('Upload successful')
         "
 
-    - name: Archive final results
+    - name: Archive results
       uses: actions/upload-artifact@v4
       with:
-        name: final-codelist-catalog
-        path: final_output.ttl
+        name: codelist-catalog
+        path: ${{ env.OUTPUT_FILE }}
