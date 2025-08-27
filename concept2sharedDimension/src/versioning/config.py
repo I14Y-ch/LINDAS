@@ -200,39 +200,7 @@ CONCEPT_IDS = [
   "08da7f9f-f202-92ea-a2fe-7410afa581a7",
   "08da7fa0-a905-1916-9fd5-e01254915ee5",
   "08da7f9e-b484-cdc6-b3b5-6f5430e3208d",
-  "08da7f9f-222d-1597-9020-df6e74d1a0b3",
-  "08dacc85-335b-34b5-9a6c-fb2dffd631f2",
-  "08da7fa1-8f44-0fb4-ad86-e1149da40cec",
-  "08db65be-1bac-fdb9-9987-5bab9dc61bf5",
-  "08da7f84-610e-8501-a91a-be3bc17cc0b3",
-  "08da7fa1-2c4e-1509-8236-2c5d4ccbe8ba",
-  "08da7f55-f895-842b-b314-8a992ddbc9cc",
-  "08da7f69-c467-0ec4-83b4-33b8c562b0c7",
-  "08da7f9f-8be1-3dc9-9e1c-203a8712ef91",
-  "08dd60a2-1a28-2f84-aea0-92103b3cb4ba",
-  "08dc5e1e-cfd8-b166-b765-2070dd7e83e1",
-  "08dc79aa-981b-7d9b-a00c-63519522b3c3",
-  "08da7ae3-0429-12c6-8f72-fae28cb09f46",
-  "08da7ae3-e189-96ec-ac6d-aec8f6332c2b",
-  "08dd4c39-e011-66a4-a0be-1c65a47652fb",
-  "08dd5cc2-1f60-bc6d-9c86-ffac51372072",
-  "08dd4c48-18ff-d594-b4f3-e20670874430",
-  "08dd20ce-0407-36e4-a411-6d3547681ed0",
-  "08dc65d1-652a-3546-9100-faffbaf7c6fd",
-  "08dc23d3-3528-bd8d-954a-50395fc0f2ec",
-  "08db7edc-7057-ded7-b6bf-48144e708cfb",
-  "08dd8174-b487-715e-99f6-1d3a87e6cf7f",
-  "08dbdeb6-e798-5a1a-9203-ccb99dc40f05",
-  "08dc23da-52bd-949d-bcd8-0e84bec82d08",
-  "08dd818d-5037-3a39-8f8c-54abee32037e",
-  "08dbfc88-9e6d-c5d4-baec-2286e3d2c47c",
-  "08da79e0-4cee-be17-b441-088500d4ba99",
-  "08da7b93-fabf-21c7-89c5-a4c4e2142800",
-  "08da7eb5-0e59-d7ed-b500-eafdfb69d511",
-  "08da7ebd-6c31-27d0-9a1f-96c113efba0c",
-  "08da7ec0-8b25-c1f4-83c4-f93630941d9a",
-  "08da7496-e293-9664-bbef-58b4b4d009a2",
-  "08da7483-fb80-07bd-9d85-5e71cca93d8c"
+  "08da7f9f-222d-1597-9020-df6e74d1a0b3"
 ]
 
 # Output file name
@@ -259,6 +227,7 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
 
 
 
