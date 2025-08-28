@@ -204,12 +204,7 @@ jobs:
           for file in batches/*.ttl; do
             if [ -f "$file" ]; then
               echo "Validating $file"
-              python -c "
-              from rdflib import Graph
-              g = Graph()
-              g.parse('$file', format='turtle')
-              print(f'Validated $file with {len(g)} triples')
-              "
+              python -c "from rdflib import Graph; g = Graph(); g.parse('$file', format='turtle'); print(f'Validated $file with {len(g)} triples')"
             fi
           done
 
@@ -218,23 +213,7 @@ jobs:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
         run: |
-          python -c "
-          import os, warnings, requests
-          warnings.filterwarnings('ignore')
-          from requests.auth import HTTPBasicAuth
-          auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-          url = os.environ['STARDOG_URL'].rstrip('/') + '/update'
-          target = os.environ['TARGET_GRAPH']
-          r = requests.post(
-              url,
-              headers={'Content-Type': 'application/sparql-update'},
-              auth=auth,
-              data=f'CLEAR GRAPH <{target}>',
-              verify=False
-          )
-          r.raise_for_status()
-          print('Graph cleared successfully - ready for final upload')
-          "
+          python -c "import os, warnings, requests; warnings.filterwarnings('ignore'); from requests.auth import HTTPBasicAuth; auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD']); url = os.environ['STARDOG_URL'].rstrip('/') + '/update'; target = os.environ['TARGET_GRAPH']; r = requests.post(url, headers={'Content-Type': 'application/sparql-update'}, auth=auth, data=f'CLEAR GRAPH <{target}>', verify=False); r.raise_for_status(); print('Graph cleared successfully - ready for final upload')"
 
       - name: Upload all batches to Stardog
         env:
