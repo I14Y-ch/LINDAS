@@ -11,7 +11,57 @@ STATUSES = ["Recorded"]
 # 21.08.2025: I have removed NOGA single hierarchy concepts (NOGA Section, ...) they are duplicates of NOGA
 # 21.08.2025: I have removed Isco Jobs related concept
 # 22.08.2025: I have removed EprAgentRole codelist (08dd632d-aee2-333d-b1e4-505385fde8ff) because it gets an internal error 500 when retrieving codelist entries from I14Y
-EXCLUDED_IDS = ["08daa609-17dd-b385-b53c-bbe38725baf1", "08dad447-fdc0-073a-b3f5-b70f4b876faf", "08dd632d-aee2-333d-b1e4-505385fde8ff", "08dd20cc-3ee5-c17a-8d8b-c1664c3421a6", "08dc74b4-30d4-be8d-ba53-91a1201ac86b", "08dceec4-b3f0-1285-b8d0-b005fabcf87c", "08d92cdc-c97d-acd7-9952-56dd375b0777", "08d92cdc-827b-5021-8242-f4166fb122b0", "08d92cdc-03c1-103f-8fec-a24aafeaedd3", "08d92cdc-4e4a-5b21-9e0e-a50ffe3f4a16", "08d92cdc-4e4a-5b21-9e0e-a50ffe3f4a16", "08d94603-f490-f094-9fe5-8012ca56d812", "08d94604-db03-1909-a097-569cb9836253", "08d94604-f12a-5d82-b6b4-fdc55b9b4750", "08d94604-e058-62a2-aa25-53f84b974201", "08d94604-e5ac-f859-9ed7-f51fe87baa25", "08da9d6a-bc1f-d917-bb12-5c78e7b8bc0f"] 
+EXCLUDED_IDS = ["08dd632d-a98d-34ff-9252-123e46d6f053",
+  "08dd632d-abd6-c1fd-9468-533a88e19499",
+  "08dd632d-ac4d-977f-a53b-ec0b1af269f8",
+  "08dd632d-aca1-b77d-80c2-3e6b677753f9",
+  "08dd632d-ad55-7a02-b041-ae0059ba8d79",
+  "08dd632d-adf6-96f1-9850-7ef00f059f80",
+  "08dd632d-aa6b-ffb2-a78b-fbff93d4f167",
+  "08dd632d-b449-6c4f-bff5-38488abd5b6f",
+  "08dd632d-aada-98dd-bbc2-21ad33bd1565",
+  "08dd632d-ab2e-9938-8e31-4fb07a28b4a3",
+  "08dd632d-ab82-6614-a9a4-c9842737aa2f",
+  "08dd632d-b23a-ec97-8812-886854f69afd",
+  "08dd632d-b378-e759-84d8-f04d0168890c",
+  "08dd632d-b2f7-197a-889f-18e7a917dd67",
+  "08dd632d-b2a2-0ed2-941d-fffb2bea1af5",
+  "08dd632d-b3c5-ed64-a995-369c44b38c06",
+  "08dd632d-ada3-bda0-be32-f270bf291810",
+  "08db65be-d31f-e3e7-b9fa-c642c099f4d1",
+  "08dc0def-b1f8-220a-8737-6c46ce923cf5",
+  "08db556b-0d39-b605-8d37-23276586388c",
+  "08dd75a2-0404-ce6f-b6d8-b302a873a635",
+  "08dd4b4d-a4eb-73e3-8062-bcf156c6cf35",
+  "08dd50de-ea53-b497-8a45-39bd23beff61",
+  "08dca65f-2d5e-9e75-8a13-48b8ecd20149",
+  "08dd5635-7148-69a6-a6b9-b4602d4d33c5",
+  "08dd50e5-da95-bba3-9ec9-f99d769eec6d",
+  "08dcabe2-1734-ca16-9dfe-262056c9c124",
+  "08dd50e7-1680-fbf8-afeb-aebe0b019720",
+  "5df63d53-d916-4bc6-b486-1ec9d8e1c25d",
+  "08dd5638-ec2c-32cd-a47b-949ae24a90bf",
+  "08dd5633-e660-9405-93ec-f0493e991309",
+  "08dc7ef4-e871-d36f-ade1-d11f8e073447",
+  "08dd355a-db74-74f8-b36e-619e3614e364",
+  "08dd3ec4-1417-9745-8b15-d386b0e448f9",
+  "08dd347b-8c3b-64d9-96b7-42ad25adb8c2",
+  "08dd5657-6a07-26e8-a0c5-ed3129c4727f",
+  "08dca714-3c5e-6cb1-9f9c-1a1bd280af27",
+  "08d9a901-e207-567d-a869-0aacd87842c2",
+  "08da7ae1-d49c-9e96-8804-a22d083934c1",
+  "08db76e7-2e85-81e1-a1d1-fa8c4c83befc",
+  "08dc969f-a6e4-5628-add9-2d204a12276c",
+  "08d97dad-a14e-c6a5-9f42-d7ad1df34dfc",
+  "08dc5df4-c2c7-1f17-9774-6a0acae02a8c",
+  "08dc5df8-5771-adb3-822e-5e7aef856710",
+  "08dc5e0c-2399-d5d5-a41a-78c07f50d7ff",
+  "08dc5def-7ce7-d1d8-b09c-e211172a5ac8",
+  "08d97dc5-fb0e-7d8a-8d67-d2b236e017b1",
+  "08dc5e14-3b6f-11c5-8307-afc5bb62d5b7",
+  "08dd87e4-2729-7764-a0ce-758107bab20d",
+  "08dd72b9-faa1-28e3-a7a8-fd3234a7ce9a",
+  "08dca1a3-c2c7-14c5-b70e-3f784356c235", "08daa609-17dd-b385-b53c-bbe38725baf1", "08dad447-fdc0-073a-b3f5-b70f4b876faf", "08dd632d-aee2-333d-b1e4-505385fde8ff", "08dd20cc-3ee5-c17a-8d8b-c1664c3421a6", "08dc74b4-30d4-be8d-ba53-91a1201ac86b", "08dceec4-b3f0-1285-b8d0-b005fabcf87c", "08d92cdc-c97d-acd7-9952-56dd375b0777", "08d92cdc-827b-5021-8242-f4166fb122b0", "08d92cdc-03c1-103f-8fec-a24aafeaedd3", "08d92cdc-4e4a-5b21-9e0e-a50ffe3f4a16", "08d92cdc-4e4a-5b21-9e0e-a50ffe3f4a16", "08d94603-f490-f094-9fe5-8012ca56d812", "08d94604-db03-1909-a097-569cb9836253", "08d94604-f12a-5d82-b6b4-fdc55b9b4750", "08d94604-e058-62a2-aa25-53f84b974201", "08d94604-e5ac-f859-9ed7-f51fe87baa25", "08da9d6a-bc1f-d917-bb12-5c78e7b8bc0f"] 
 
 # If using specific concept IDs
 CONCEPT_IDS = [
@@ -92,6 +142,7 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
 
 
 
