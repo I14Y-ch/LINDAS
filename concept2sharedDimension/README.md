@@ -68,22 +68,22 @@ In the folder `.github/workflows` you can find the `main.yml` file with the istr
 
 ### Workflow Logic
 
-1. **Get Concepts Job** (`get-concepts`):
-   - Retrieves all concept IDs the specified statuses
+1. `get-concepts`:
+   - Retrieves all concept IDs the specified statuses or harcoded Ids
    - Calculates the number of batches needed based on the `BATCH_SIZE` environment variable
    - Creates a job matrix for parallel processing of batches
    - Outputs the list of concept IDs and batch configuration
 
-2. **Process Batches Job** (`process-batches`):
+2. `process-batches`:
    - Processes concepts to generate RDF triples in Turtle format
    - Uploads each batch's output as a separate artifact for later combination
 
-3. **Combine and Upload Job** (`combine-and-upload`):
+3. `clear-and-upload`:
    - Downloads all batch artifacts after all batches complete
-   - Combines the RDF files from all batches into a single file
-   - Handles RDF prefix deduplication to ensure valid Turtle syntax
    - Clears the existing Stardog graph
-   - Uploads the combined RDF data to the target Stardog graph
+   - Uploads the artifacts to the target Stardog graph
+
+4. `final_summary`
 
 ### Environment Configuration
 
@@ -132,6 +132,7 @@ The URI created for the publication in RDF of I14Y concept is constructed as fol
 | Concept / Defined term set version |https://register.ld.admin.ch/i14y/[concept_identifier]/version/[version_number] | [concept name] + " (version " + [version number] ")"|
 | Code / Defined term identity |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier] | [code name] + " (identitiy)" |
 | Code / Defined term version |https://register.ld.admin.ch/i14y/[concept_identifier]/[code_identifier]/version/[version_number]| [code name] + " (version " + [version number] ")"|
+
 
 
 
