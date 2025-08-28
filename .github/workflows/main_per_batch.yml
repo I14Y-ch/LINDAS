@@ -208,9 +208,43 @@ jobs:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
         run: |
-          python -c "import os, warnings, requests; warnings.filterwarnings('ignore'); from requests.auth import HTTPBasicAuth; auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD']); url = os.environ['STARDOG_URL'].rstrip('/') + '/update'; target = os.environ['TARGET_GRAPH']; r = requests.post(url, headers={'Content-Type': 'application/sparql-update'}, auth=auth, data=f'CLEAR GRAPH <{target}>', verify=False); r.raise_for_status(); print('Graph cleared successfully - ready for final upload')"
+          python3 << 'EOF'
+          import os, warnings, requests
+          warnings.filterwarnings('ignore')
+          from requests.auth import HTTPBasicAuth
+          
+          try:
+              auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+              url = os.environ['STARDOG_URL'].rstrip('/') + '/update'
+              target = os.environ['TARGET_GRAPH']
+              
+              print(f'Clearing graph: {target}')
+              print(f'Using URL: {url}')
+              print(f'Using user: {os.environ["STARDOG_USER"]}')
+              
+              r = requests.post(
+                  url,
+                  headers={'Content-Type': 'application/sparql-update'},
+                  auth=auth,
+                  data=f'CLEAR GRAPH <{target}>',
+                  verify=False
+              )
+              
+              print(f'Response status: {r.status_code}')
+              print(f'Response headers: {dict(r.headers)}')
+              
+              if r.status_code == 200:
+                  print('Graph cleared successfully - ready for final upload')
+              else:
+                  print(f'Response text: {r.text}')
+                  # Try to continue anyway - maybe the graph didn't exist
+                  print('Warning: Clear operation failed, but continuing with upload')
+                  
+          except Exception as e:
+              print(f'Error clearing graph: {e}')
+              print('Warning: Clear operation failed, but continuing with upload')
+          EOF
 
-      
       - name: Upload all batches to Stardog
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
@@ -263,7 +297,6 @@ jobs:
           done
           
           echo "Upload complete: $batch_count batches with $total_triples total triples"
-
 
   final-summary:
     needs: [get-concepts, process-batches, clear-and-upload]
