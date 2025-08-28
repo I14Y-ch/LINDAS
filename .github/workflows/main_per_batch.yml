@@ -152,12 +152,7 @@ jobs:
         env:
           OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
         run: |
-          python -c "
-          from rdflib import Graph
-          g = Graph()
-          g.parse('$OUTPUT_FILE', format='turtle')
-          print(f'Validated RDF with {len(g)} triples')
-          "
+          python -c "from rdflib import Graph; g = Graph(); g.parse('$OUTPUT_FILE', format='turtle'); print(f'Validated RDF with {len(g)} triples')"
 
       - name: Archive batch results
         uses: actions/upload-artifact@v4
@@ -229,34 +224,36 @@ jobs:
               echo "Uploading $(basename $file)..."
               
               # Get triple count for this batch
-              triples=$(python -c "
-              from rdflib import Graph
-              g = Graph()
-              g.parse('$file', format='turtle')
-              print(len(g))
-              ")
+              triples=$(python3 << EOF
+          from rdflib import Graph
+          g = Graph()
+          g.parse('$file', format='turtle')
+          print(len(g))
+          EOF
+          )
               
               # Upload to Stardog
-              python -c "
-              import os, warnings, requests
-              warnings.filterwarnings('ignore')
-              from requests.auth import HTTPBasicAuth
-              
-              auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-              url = os.environ['STARDOG_URL']
-              params = {'graph': os.environ['TARGET_GRAPH']}
-              
-              with open('$file', 'rb') as f:
-                  r = requests.post(
-                      url, 
-                      params=params, 
-                      headers={'Content-Type': 'text/turtle'}, 
-                      auth=auth, 
-                      data=f, 
-                      verify=False
-                  )
-                  r.raise_for_status()
-              "
+              python3 << EOF
+          import os, warnings, requests
+          warnings.filterwarnings('ignore')
+          from requests.auth import HTTPBasicAuth
+          
+          auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+          url = os.environ['STARDOG_URL']
+          params = {'graph': os.environ['TARGET_GRAPH']}
+          
+          with open('$file', 'rb') as f:
+              r = requests.post(
+                  url, 
+                  params=params, 
+                  headers={'Content-Type': 'text/turtle'}, 
+                  auth=auth, 
+                  data=f, 
+                  verify=False
+              )
+              r.raise_for_status()
+          print('Upload successful')
+          EOF
               
               echo "Successfully uploaded $(basename $file) with $triples triples"
               batch_count=$((batch_count + 1))
