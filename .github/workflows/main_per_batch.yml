@@ -48,11 +48,18 @@ jobs:
           python - <<'PY'
           import json, os
           from concept2sharedDimension.src.versioning.utils import get_all_concepts
-          from concept2sharedDimension.src.versioning.config import STATUSES
+          from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
 
-          concepts = get_all_concepts(STATUSES)
-          ids = [c['id'] for c in concepts]
-          print(f"Total concepts found: {len(ids)}")
+          if USE_STATUSES:
+              print("Using status-based filtering")
+              concepts = get_all_concepts(STATUSES)
+              ids = [c['id'] for c in concepts]
+              print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
+          else:
+              print("Using hardcoded concept IDs from config")
+              ids = CONCEPT_IDS
+              print(f"Total hardcoded concept IDs: {len(ids)}")
+              print(f"Concept IDs: {ids[:3]}{'...' if len(ids) > 3 else ''}")
 
           batch_size = int(os.environ.get('BATCH_SIZE','30'))
           n_batches = (len(ids) + batch_size - 1) // batch_size
@@ -253,6 +260,7 @@ jobs:
           echo "Uploading all batch files to Stardog..."
           batch_count=0
           total_triples=0
+          failed_uploads=0
           
           for file in batches/*.ttl; do
             if [ -f "$file" ]; then
@@ -268,35 +276,55 @@ jobs:
           )
               
               # Upload to Stardog
-              python3 << EOF
+              upload_result=$(python3 << EOF
           import os, warnings, requests
           warnings.filterwarnings('ignore')
           from requests.auth import HTTPBasicAuth
           
-          auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-          url = os.environ['STARDOG_URL']
-          params = {'graph': os.environ['TARGET_GRAPH']}
-          
-          with open('$file', 'rb') as f:
-              r = requests.post(
-                  url, 
-                  params=params, 
-                  headers={'Content-Type': 'text/turtle'}, 
-                  auth=auth, 
-                  data=f, 
-                  verify=False
-              )
-              r.raise_for_status()
-          print('Upload successful')
-          EOF
+          try:
+              auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+              url = os.environ['STARDOG_URL']
+              params = {'graph': os.environ['TARGET_GRAPH']}
               
-              echo "Successfully uploaded $(basename $file) with $triples triples"
-              batch_count=$((batch_count + 1))
-              total_triples=$((total_triples + triples))
+              with open('$file', 'rb') as f:
+                  r = requests.post(
+                      url, 
+                      params=params, 
+                      headers={'Content-Type': 'text/turtle'}, 
+                      auth=auth, 
+                      data=f, 
+                      verify=False
+                  )
+              
+              if r.status_code == 200:
+                  print('SUCCESS')
+              else:
+                  print(f'FAILED: Status {r.status_code}, Response: {r.text[:200]}')
+                  
+          except Exception as e:
+              print(f'ERROR: {str(e)[:200]}')
+          EOF
+          )
+              
+              if [[ "$upload_result" == "SUCCESS" ]]; then
+                echo "Successfully uploaded $(basename $file) with $triples triples"
+                batch_count=$((batch_count + 1))
+                total_triples=$((total_triples + triples))
+              else
+                echo "Failed to upload $(basename $file): $upload_result"
+                failed_uploads=$((failed_uploads + 1))
+              fi
             fi
           done
           
-          echo "Upload complete: $batch_count batches with $total_triples total triples"
+          echo "Upload summary:"
+          echo "- Successful uploads: $batch_count batches with $total_triples total triples"
+          echo "- Failed uploads: $failed_uploads"
+          
+          if [ $failed_uploads -gt 0 ]; then
+            echo "Warning: Some uploads failed, but continuing..."
+            exit 1
+          fi
 
   final-summary:
     needs: [get-concepts, process-batches, clear-and-upload]
