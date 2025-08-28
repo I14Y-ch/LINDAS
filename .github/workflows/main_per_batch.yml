@@ -67,7 +67,30 @@ jobs:
             print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
 
-  process-batches:
+      - name: Clear Stardog Graph (once before all batches)
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+        run: |
+          python -c "
+          import os, warnings, requests
+          warnings.filterwarnings('ignore')
+          from requests.auth import HTTPBasicAuth
+          auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+          url = os.environ['STARDOG_URL'].rstrip('/') + '/update'
+          target = os.environ['TARGET_GRAPH']
+          r = requests.post(
+              url,
+              headers={'Content-Type': 'application/sparql-update'},
+              auth=auth,
+              data=f'CLEAR GRAPH <{target}>',
+              verify=False
+          )
+          r.raise_for_status()
+          print('✓ Graph cleared successfully - ready for batch uploads')
+          "
+
+  process-and-upload-batches:
     needs: get-concepts
     runs-on: ubuntu-latest
     strategy:
@@ -138,213 +161,83 @@ jobs:
         if: steps.calc-batch.outputs.batch_ids != ''
         env:
           BATCH_CONCEPT_IDS: ${{ steps.calc-batch.outputs.batch_ids }}
+          OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
         shell: bash
         run: |
           echo "Processing batch ${{ matrix.batch_index }}"
           echo "Concept IDs: $BATCH_CONCEPT_IDS"
           echo "Batch size: ${{ steps.calc-batch.outputs.actual_batch_size }}"
+          echo "Output file: $OUTPUT_FILE"
           
           # Run the main script with the environment variable set
-          # The updated main.py will prioritize BATCH_CONCEPT_IDS environment variable
           python -m concept2sharedDimension.src.main --batch-index ${{ matrix.batch_index }}
 
-      - name: Upload batch artifact
+      - name: Validate RDF
+        if: steps.calc-batch.outputs.batch_ids != ''
+        env:
+          OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
+        run: |
+          python -c "
+          from rdflib import Graph
+          g = Graph()
+          g.parse('$OUTPUT_FILE', format='turtle')
+          print(f'Validated RDF with {len(g)} triples')
+          "
+
+      - name: Upload batch to Stardog
+        if: steps.calc-batch.outputs.batch_ids != ''
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+          OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
+        run: |
+          echo "Uploading batch ${{ matrix.batch_index }} to Stardog..."
+          python -c "
+          import os, warnings, requests
+          warnings.filterwarnings('ignore')
+          from requests.auth import HTTPBasicAuth
+          
+          output_file = os.environ['OUTPUT_FILE']
+          
+          # Check if file exists and has content
+          if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+              print(f'Skipping upload - {output_file} is empty or does not exist')
+              exit(0)
+          
+          auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
+          url = os.environ['STARDOG_URL']
+          params = {'graph': os.environ['TARGET_GRAPH']}
+          
+          with open(output_file, 'rb') as f:
+              r = requests.post(
+                  url, 
+                  params=params, 
+                  headers={'Content-Type': 'text/turtle'}, 
+                  auth=auth, 
+                  data=f, 
+                  verify=False
+              )
+              r.raise_for_status()
+              print(f'Successfully uploaded batch ${{ matrix.batch_index }} to Stardog')
+          "
+
+      - name: Archive batch results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: batch-${{ matrix.batch_index }}-output
-          path: |
-            ${{ needs.get-concepts.outputs.output_file }}
-            batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
+          path: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
 
-  combine-and-upload:
-    needs: [get-concepts, process-batches]
+  final-summary:
+    needs: [get-concepts, process-and-upload-batches]
     runs-on: ubuntu-latest
+    if: always()
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-  
-      - name: Install dependencies
+      - name: Summary
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install rdflib requests
-          
-      - name: Download all batch artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: batches
-          pattern: batch-*-output
-          merge-multiple: true
-
-      - name: List downloaded files
-        run: |
-          echo "Downloaded batch files:"
-          find batches -name "*.ttl" -type f | sort
-          echo "File sizes:"
-          find batches -name "*.ttl" -type f -exec ls -lh {} \;
-
-      - name: Combine RDF files
-        shell: bash
-        run: |
-          shopt -s nullglob
-          files=(batches/*.ttl)
-          
-          echo "Found ${#files[@]} TTL files to combine"
-          
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No TTL files found; creating empty final_output.ttl"
-            echo "# Empty file - no concepts processed" > final_output.ttl
-          else
-            echo "Combining files: ${files[*]}"
-            cat "${files[@]}" > combined_output.ttl
-            
-            # Check if combined file has content
-            if [ -s combined_output.ttl ]; then
-              echo "Combined file size: $(wc -l < combined_output.ttl) lines"
-              
-              # Deduplicate prefixes and clean up
-              python - <<'PY'
-          import re
-          src = 'combined_output.ttl'
-          dst = 'final_output.ttl'
-          
-          with open(src, 'r', encoding='utf-8') as f:
-              content = f.read()
-          
-          prefixes = {}
-          other_lines = []
-          
-          for line in content.splitlines():
-              line = line.strip()
-              if line.startswith('@prefix'):
-                  # Extract prefix name
-                  m = re.match(r'@prefix\s+(\S+):', line)
-                  if m:
-                      prefix_name = m.group(1)
-                      if prefix_name not in prefixes:
-                          prefixes[prefix_name] = line
-                  else:
-                      # If regex fails, just add it
-                      prefixes[len(prefixes)] = line
-              elif line:  # Skip empty lines during processing
-                  other_lines.append(line)
-          
-          # Write output with prefixes first, then content
-          with open(dst, 'w', encoding='utf-8') as f:
-              # Write all unique prefixes
-              for prefix_line in prefixes.values():
-                  f.write(prefix_line + '\n')
-              f.write('\n')  # Empty line after prefixes
-              
-              # Write content
-              f.write('\n'.join(other_lines))
-              if other_lines:  # Add final newline if there's content
-                  f.write('\n')
-          PY
-            else
-              echo "Combined file is empty"
-              echo "# No content generated" > final_output.ttl
-            fi
-          fi
-
-      - name: Validate combined RDF
-        shell: bash
-        run: |
-          if [ -s final_output.ttl ]; then
-            echo "Validating RDF file..."
-            python - <<'PY'
-          from rdflib import Graph
-          import sys
-          
-          try:
-              g = Graph()
-              g.parse('final_output.ttl', format='turtle')
-              print(f'✓ Validated combined RDF with {len(g)} triples')
-              
-              # Count concepts for verification
-              from rdflib.namespace import RDF
-              from rdflib import Namespace
-              SDO = Namespace("http://schema.org/")
-              vl = Namespace("https://version.link/#")
-              
-              identities = len(list(g.subjects(RDF.type, SDO.DefinedTermSet)))
-              versions = len(list(g.subjects(RDF.type, vl.Version)))
-              
-              print(f'✓ Found {identities} total DefinedTermSet objects')
-              print(f'✓ Found {versions} version objects')
-              
-          except Exception as e:
-              print(f'✗ RDF validation failed: {e}')
-              sys.exit(1)
-          PY
-          else
-            echo "⚠ final_output.ttl is empty; skipping validation."
-          fi
-
-      - name: Clear Stardog Graph
-        env:
-          STARDOG_USER: ${{ secrets.STARDOG_USER }}
-          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os, warnings, requests
-          warnings.filterwarnings("ignore")
-          auth = requests.auth.HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-          url = os.environ['STARDOG_URL'].rstrip('/') + '/update'
-          target = os.environ['TARGET_GRAPH']
-          r = requests.post(
-              url,
-              headers={'Content-Type': 'application/sparql-update'},
-              auth=auth,
-              data=f'CLEAR GRAPH <{target}>',
-              verify=False
-          )
-          r.raise_for_status()
-          print('✓ Graph cleared successfully')
-          PY
-
-      - name: Upload to Stardog
-        env:
-          STARDOG_USER: ${{ secrets.STARDOG_USER }}
-          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
-        shell: bash
-        run: |
-          if [ -s final_output.ttl ]; then
-            echo "Uploading to Stardog..."
-            python - <<'PY'
-          import os, warnings, requests
-          warnings.filterwarnings("ignore")
-          auth = requests.auth.HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-          url = os.environ['STARDOG_URL']
-          params = {'graph': os.environ['TARGET_GRAPH']}
-          
-          with open('final_output.ttl', 'rb') as f:
-            r = requests.post(
-                url, 
-                params=params, 
-                headers={'Content-Type': 'text/turtle'}, 
-                auth=auth, 
-                data=f, 
-                verify=False
-            )
-            r.raise_for_status()
-            print('✓ Upload successful')
-          PY
-          else
-            echo "⚠ No data to upload - final_output.ttl is empty"
-          fi  
-
-      - name: Archive final results
-        uses: actions/upload-artifact@v4
-        with:
-          name: final-codelist-catalog
-          path: final_output.ttl
-          if-no-files-found: error
+          echo "Processing Summary:"
+          echo "Total concepts: ${{ needs.get-concepts.outputs.total_concepts }}"
+          echo "Batch size: ${{ env.BATCH_SIZE }}"
+          echo "All batches have been processed and uploaded individually to Stardog"
+          echo "Target graph: ${{ env.TARGET_GRAPH }}"
