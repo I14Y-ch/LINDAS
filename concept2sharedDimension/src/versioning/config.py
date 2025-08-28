@@ -1,7 +1,7 @@
 from rdflib import Namespace
 
 # Toggle between using statuses or concept_ids
-USE_STATUSES = False # Set to False to use concept_ids
+USE_STATUSES = True # Set to False to use concept_ids
 
 # If using statuses
 # One of the following: Candidate, Recorded, Qualified, Standard, PreferredStandard, Superseded, Retired
@@ -40,6 +40,7 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
 
 
 
