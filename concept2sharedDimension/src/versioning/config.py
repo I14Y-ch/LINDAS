@@ -20,7 +20,7 @@ OUTPUT_FILE_NAME = "output.ttl"
 
 
 # namespace for the URI construction
-BASE_URI = "https://register.ld.admin.ch/i14y/"
+BASE_URI = "https://register.ld.admin.ch/i14y/concept/"
 
 # Constants for API configuration 
 #API_TOKEN = "" # not necessary for prod and public concepts
@@ -33,7 +33,7 @@ CUBELINK = Namespace("https://cube.link/meta/")
 XKOS = Namespace("http://rdf-vocabulary.ddialliance.org/xkos#")
 SHACL = Namespace("http://www.w3.org/ns/shacl#")
 QUDT = Namespace("https://qudt.org/schema/qudt/")
-vl = Namespace("https://version.link/#")
+vl = Namespace("https://version.link/")
 oa = Namespace("https://www.w3.org/ns/oa#")
 dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/appendices/appendix-1/relationType/#")
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
