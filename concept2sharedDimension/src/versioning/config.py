@@ -5,7 +5,7 @@ USE_STATUSES = True # Set to False to use concept_ids
 
 # If using statuses
 # One of the following: Candidate, Recorded, Qualified, Standard, PreferredStandard, Superseded, Retired
-STATUSES = ["Qualified",  "Standard", "PreferredStandard"]
+STATUSES = ["Recorded", "Qualified",  "Standard", "PreferredStandard"]
 
 #Use this variable to esclude specific Ids: 
 # 21.08.2025: I have removed NOGA single hierarchy concepts (NOGA Section, ...) they are duplicates of NOGA
