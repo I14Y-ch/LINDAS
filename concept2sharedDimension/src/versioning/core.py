@@ -319,8 +319,8 @@ class CodeListManager:
             text_data = annotation.get('text', {})
 
             # Skip HIER_LEVEL annotations as they're handled in _process_entry
-            if annotation_type == 'HIER_LEVEL':
-                continue
+            # if annotation_type == 'HIER_LEVEL':
+            #     continue
 
             # Handle special XKOS predicates
             if annotation_type in annotation_predicates:
