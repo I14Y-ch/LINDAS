@@ -194,20 +194,21 @@ class CodeListManager:
         if 'annotations' in entry:
             self.add_annotations(entry_uri, entry['annotations'])
         #in some cases it is used text (multilingual string) in other title (not multilingual)
-            for annotation in entry.get('annotations', []):
+            # Commented as generates issue with HIER_LEVEL
+            # for annotation in entry.get('annotations', []):
     
-                if annotation.get('type') == 'HIER_LEVEL':
+            #     if annotation.get('type') == 'HIER_LEVEL':
             
-                    if 'text' in annotation and is_valid_value(annotation['text']):
-                        level_title = {
-                            lang: annotation['text'].get(lang, level_title[lang]) 
-                            for lang in level_title
-                            if is_valid_value(annotation['text'].get(lang, level_title[lang]))
-                        }
+            #         if 'text' in annotation and is_valid_value(annotation['text']):
+            #             level_title = {
+            #                 lang: annotation['text'].get(lang, level_title[lang]) 
+            #                 for lang in level_title
+            #                 if is_valid_value(annotation['text'].get(lang, level_title[lang]))
+            #             }
             
-                    elif 'title' in annotation and is_valid_value(annotation['title']):
+            #         elif 'title' in annotation and is_valid_value(annotation['title']):
                 
-                        level_title = {lang: annotation['title'] for lang in level_title}
+            #             level_title = {lang: annotation['title'] for lang in level_title}
 
 
         if not any(level['uri'] == level_uri for level in self.levels_info_all):
