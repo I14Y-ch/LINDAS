@@ -287,7 +287,7 @@ jobs:
               params = {'graph': os.environ['TARGET_GRAPH']}
               
               with open('$file', 'rb') as f:
-                  r = requests.put(
+                  r = requests.post(
                       url, 
                       params=params, 
                       headers={'Content-Type': 'text/turtle'}, 
