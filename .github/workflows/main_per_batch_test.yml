@@ -48,12 +48,12 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
-          from concept2sharedDimension.src.versioning.utils import get_all_concepts
+          from concept2sharedDimension.src.versioning.utils import I14YAPIHelper
           from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
 
           if USE_STATUSES:
               print("Using status-based filtering")
-              concepts = get_all_concepts(STATUSES)
+              concepts = I14YAPIHelper.get_all_concepts(STATUSES)
               ids = [c['id'] for c in concepts]
               print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
           else:
