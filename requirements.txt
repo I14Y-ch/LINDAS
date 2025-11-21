@@ -2,3 +2,5 @@ rdflib
 beautifulsoup4
 requests
 python-dateutil
+oxrdflib
+pyoxigraph

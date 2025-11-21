@@ -1,45 +1,143 @@
+from time import time
 import requests as r
 from .config import *
-from rdflib import Literal 
+from rdflib import Literal
 
-def get_concept_data(concept_id):
-    """Get combined concept metadata and codelist entries"""
-    try:
-        # Get concept metadata
-        meta_url = f"{BASE_API_URL}{concept_id}"
-        meta_response = r.get(meta_url, verify=False)
-        meta_response.raise_for_status()
-        concept_data = meta_response.json()['data']
-        
+def timer(func):
+    """Decorator that shows the execution time of the function object passed"""
+
+    def wrap_func(*args, **kwargs):
+        t1 = time()
+        result = func(*args, **kwargs)
+        t2 = time()
+        print(f"Function {func.__name__!r} executed in {(t2-t1):.4f}s")
+        return result
+
+    return wrap_func
+
+class I14YAPIHelper:
+
+    # We call the API only once to get all the concepts, then we work on the data locally
+    # local_concepts is a i14y id -> concept map
+    local_id_concepts_map = {}
+
+    # Same idea, but here we have a concept identifier -> concept list map
+    local_identifier_concepts_map = {}
+
+    @staticmethod
+    def get_all_concepts(registration_statuses=None):
+        """Get all CodeList concepts with specified registration statuses"""
+        if not I14YAPIHelper.local_id_concepts_map:
+            print("DEBUG: get_all_concepts API call")
+
+            base_url = f"{BASE_API_URL}"
+            all_concepts = []
+            printed_count = 0  
+            failed_concepts = []
+
+            if registration_statuses is None:
+                registration_statuses = ['Standard', 'Qualified', 'PreferredStandard']
+
+            page = 1
+            while True:
+                params = {
+                    'publicationLevel': 'Public',
+                    'page': page,
+                    'pageSize': 100  
+                }
+
+                response = r.get(base_url, params=params, verify=False)
+                response.raise_for_status()
+                data = response.json().get('data', [])
+
+                if not data:
+                    break
+
+                filtered = [
+                    c for c in data 
+                    if (c.get('conceptType') == 'CodeList' 
+                        and c.get('registrationStatus') in registration_statuses
+                        and c.get('identifier')  != "2.16.756.5.30.1.127.3.10.13.1"
+                        and c.get('id') not in EXCLUDED_IDS)
+                ]
+
+                for i, concept in enumerate(filtered, printed_count + 1):
+                    print(f"{i}. Identifier: {concept.get('identifier')}")
+                    print(f"   Title: {concept.get('name')}")
+                    print(f"   Status: {concept.get('registrationStatus')}")
+                    print(f"   Version: {concept.get('version')}\n")
+
+                all_concepts.extend(filtered)
+                printed_count = len(all_concepts)  
+
+                if len(data) < 100:
+                    break
+
+                page += 1
+
+            # Give warning if any concepts failed during processing
+            if failed_concepts:
+                print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}")
+
+            for concept in all_concepts:
+                I14YAPIHelper.local_id_concepts_map[concept["id"]] = concept
+                concept_identifier = concept["identifier"]
+                if concept_identifier not in I14YAPIHelper.local_identifier_concepts_map.keys():
+                    I14YAPIHelper.local_identifier_concepts_map[concept_identifier] = []
+                I14YAPIHelper.local_identifier_concepts_map[concept_identifier].append(concept)
+
+        return list(I14YAPIHelper.local_id_concepts_map.values())
+
+    @staticmethod
+    def get_concept_data(concept_id):
+        """Get combined concept metadata and codelist entries"""
+        if concept_id not in I14YAPIHelper.local_id_concepts_map.keys():
+            print(f"DEBUG: get_concept_data get API call for concept_id: {concept_id}")
+            # Get concept metadata
+            meta_url = f"{BASE_API_URL}{concept_id}"
+            meta_response = r.get(meta_url, verify=False)
+            meta_response.raise_for_status()
+            concept_data = meta_response.json()['data']
+
+            I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
+
+        concept_data = I14YAPIHelper.local_id_concepts_map[concept_id]
         # Get codelist entries (if it's a CodeList concept)
-        if concept_data.get('conceptType') == 'CodeList':
-            entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/json"
+        if concept_data.get('conceptType') == 'CodeList' and 'codeListEntries' not in concept_data.keys():
+            print(f"DEBUG: get_concept_data /codelist-entries/exports/Json API call for concept_id: {concept_id}")
+            entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/Json"
             entries_response = r.get(entries_url, verify=False)
             entries_response.raise_for_status()
             concept_data['codeListEntries'] = entries_response.json()['data']
-        
-        # Return in legacy format
-        return {'data': concept_data}
-    
-    except Exception as e:
-        print(f"Warning: Error fetching concept data for {concept_id}: {str(e)}")
-        return None  # Return None instead of raising exception
+            I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
 
-def get_version_list(concept_identifier):
-    """Get list of versions using the filter approach"""
-    try:
-        url = f"{BASE_API_URL}"
-        params = {
-            'conceptIdentifier': concept_identifier,
-            'publicationLevel': 'Public',
-            'pageSize': 100
-        }
-        
-        response = r.get(url, params=params, verify=False)
-        response.raise_for_status()
-        
-        concepts = response.json().get('data', [])
-        
+        # Return in legacy format
+        return {'data': I14YAPIHelper.local_id_concepts_map[concept_id]}
+
+    @staticmethod
+    def get_version_list(concept_identifier):
+        """Get list of versions using the filter approach"""
+        if concept_identifier not in I14YAPIHelper.local_identifier_concepts_map.keys():
+            print(f"DEBUG: get_version_list get API call for concept_identifier: {concept_identifier}")
+            try:
+                url = f"{BASE_API_URL}"
+                params = {
+                    'conceptIdentifier': concept_identifier,
+                    'publicationLevel': 'Public',
+                    'pageSize': 100
+                }
+
+                response = r.get(url, params=params, verify=False)
+                response.raise_for_status()
+
+                concepts = response.json().get('data', [])
+                I14YAPIHelper.local_identifier_concepts_map[concept_identifier] = concepts
+            except Exception as e:
+                print(f"Error fetching versions for {concept_identifier}: {str(e)}")
+                raise
+
+        concepts = I14YAPIHelper.local_identifier_concepts_map[concept_identifier]
+
         versions = []
         for concept in concepts:
             versions.append({
@@ -48,81 +146,25 @@ def get_version_list(concept_identifier):
                 'validFrom': concept.get('validFrom'),
                 'registrationStatus': concept.get('registrationStatus')
             })
-        
+
         sorted_versions = sorted(versions, key=lambda x: x['validFrom'])
-        
+
         version_data = []
         failed_concepts = []
-        
+
         for version in sorted_versions:
-            data = get_concept_data(version['id'])
+            data = I14YAPIHelper.get_concept_data(version['id'])
             if data is not None:
                 version_data.append(data["data"])
             else:
                 failed_concepts.append(version['id'])
-        
+
         # Give warning if any concepts failed to retrieve
         if failed_concepts:
             print(f"Warning: {len(failed_concepts)} concept version(s) could not be retrieved: {', '.join(failed_concepts)}")
-        
+
         return version_data
 
-    except Exception as e:
-        print(f"Error fetching versions for {concept_identifier}: {str(e)}")
-        raise
-
-def get_all_concepts(registration_statuses=None):
-    """Get all CodeList concepts with specified registration statuses"""
-    base_url = f"{BASE_API_URL}"
-    all_concepts = []
-    printed_count = 0  
-    failed_concepts = []
-
-    if registration_statuses is None:
-        registration_statuses = ['Standard', 'Qualified', 'PreferredStandard']
-
-    page = 1
-    while True:
-        params = {
-            'publicationLevel': 'Public',
-            'page': page,
-            'pageSize': 100  
-        }
-        
-        response = r.get(base_url, params=params, verify=False)
-        response.raise_for_status()
-        data = response.json().get('data', [])
-        
-        if not data:
-            break
-            
-        filtered = [
-            c for c in data 
-            if (c.get('conceptType') == 'CodeList' 
-                and c.get('registrationStatus') in registration_statuses
-                and c.get('identifier')  != "2.16.756.5.30.1.127.3.10.13.1"
-                and c.get('id') not in EXCLUDED_IDS)
-        ]
-
-        for i, concept in enumerate(filtered, printed_count + 1):
-            print(f"{i}. Identifier: {concept.get('identifier')}")
-            print(f"   Title: {concept.get('name')}")
-            print(f"   Status: {concept.get('registrationStatus')}")
-            print(f"   Version: {concept.get('version')}\n")
-        
-        all_concepts.extend(filtered)
-        printed_count = len(all_concepts)  
-        
-        if len(data) < 100:
-            break
-            
-        page += 1
-    
-    # Give warning if any concepts failed during processing
-    if failed_concepts:
-        print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}")
-                
-    return all_concepts
 
 def is_valid_value(value):
     """check for multilingual field if the value is not empty"""
@@ -207,8 +249,3 @@ class VersionDiff:
     #     from packaging import version
 
     #     return version.parse(current_version) > version.parse(existing_version)
-
-
-
-
-

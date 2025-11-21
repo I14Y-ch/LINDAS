@@ -207,3 +207,8 @@ marimo/_lsp/
 __marimo__/
 concept2sharedDimension/src/local/reset graph.py
 concept2sharedDimension/src/local/test graph connection.py
+
+*.ttl
+*.nt
+concept2sharedDimension/src/local_tests*
+concept2sharedDimension/src/debug*

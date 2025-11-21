@@ -1,6 +1,7 @@
 name: Weekly Concept2Lindas Update (TEST)
 
 on:
+  # TODO: decomment once workflow works well
   # schedule:
   #   - cron: '0 0 * * 1,5'  # 00:00 every Monday and Friday
   workflow_dispatch:
@@ -9,7 +10,7 @@ env:
   PYTHON_VERSION: '3.10'
   STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
-  BATCH_SIZE: '30'  # strings in env; cast to int in code
+  BATCH_SIZE: '50'  # strings in env; cast to int in code
 
 jobs:
   get-concepts:

@@ -1,19 +1,141 @@
+from collections import defaultdict
 from rdflib import URIRef, Literal, Namespace, BNode, Graph
 from rdflib.namespace import DCTERMS, XSD, RDF, SKOS, OWL, DCTERMS, PROV, FOAF, VOID
-from .utils import is_valid_value
+from .utils import is_valid_value, timer
 from .config import *
 
+from pathlib import Path
+from rdflib import URIRef, BNode, Literal, Namespace, RDF, RDFS, XSD
+
+import hashlib
+from pathlib import Path
+from rdflib import URIRef, BNode, Literal
+
+class StreamingTurtleWriter:
+    """
+    Turtle writer compatible with rdflib.Graph.add().
+    Writes triples directly to a Turtle file on disk while preserving
+    literals, blank nodes, and escaping like rdflib would.
+    Deduplicates triples using SHA256 hashes.
+    """
+    def __init__(self, filename):
+        self.filename = Path(filename)
+        self.f = self.filename.open("w", encoding="utf-8")
+        self.prefixes = {}
+        self.bnode_map = {}       # deterministic mapping of BNodes
+        self.seen_hashes = set()  # store hashes of triples to deduplicate
+        self.types_by_subject = defaultdict(set)
+
+    def bind(self, prefix, uri):
+        """Bind a namespace prefix (compatible with graph.bind())"""
+        self.prefixes[prefix] = uri
+        self.f.write(f"@prefix {prefix}: <{uri}> .\n")
+
+    def add(self, triple):
+        """Add a triple to the Turtle file if not already seen"""
+        h = self._triple_hash(triple)
+        if h in self.seen_hashes:
+            return  # skip duplicate
+        self.seen_hashes.add(h)
+
+        s, p, o = triple
+        line = f"{self._format_node(s)} {self._format_node(p)} {self._format_node(o)} .\n"
+        self.f.write(line)
+
+        # We add this to memory to count the number of versions and concepts at the end
+        if p == RDF.type:
+            self.types_by_subject[s].add(o)
+
+    def final_counts(self):
+        concept_count = 0
+        version_count = 0
+
+        for types in self.types_by_subject.values():
+            if SDO.DefinedTermSet in types and vl.Identity in types:
+                concept_count += 1
+
+            if SDO.DefinedTermSet in types and vl.Version in types:
+                version_count += 1
+
+        return concept_count, version_count
+
+    def _triple_hash(self, triple):
+        """Compute SHA256 hash of a triple for deduplication"""
+        s, p, o = triple
+        # Convert each component to string like it would appear in the file
+        s_str = self._format_node(s)
+        p_str = self._format_node(p)
+        o_str = self._format_node(o)
+        triple_bytes = f"{s_str} {p_str} {o_str}".encode("utf-8")
+        return hashlib.sha256(triple_bytes).hexdigest()
+
+    def _format_node(self, node):
+        """Format a node in Turtle syntax like rdflib would"""
+        if isinstance(node, URIRef):
+            return f"<{str(node)}>"
+        elif isinstance(node, BNode):
+            # deterministic BNode mapping
+            if node not in self.bnode_map:
+                self.bnode_map[node] = f"b{len(self.bnode_map)+1}"
+            return f"_:{self.bnode_map[node]}"
+        elif isinstance(node, Literal):
+            return self._format_literal(node)
+        else:
+            return f'"{str(node)}"'
+
+    def _format_literal(self, lit: Literal) -> str:
+        """Format Literal with rdflib-compatible escaping."""
+        val = str(lit)
+
+        # Normalize line endings (CRLF/CR → LF) — rdflib does this internally
+        val = val.replace("\r\n", "\n").replace("\r", "\n")
+
+        # MULTILINE handling
+        if "\n" in val:
+            # rdflib uses escaped \n inside "..." instead of """..."""
+            escaped = (
+                val.replace("\\", "\\\\")     # escape backslashes
+                .replace('"', '\\"')       # escape quotes
+                .replace("\n", "\\n")      # TURN real newlines INTO \n
+            )
+            lit_str = f'"{escaped}"'
+
+        else:
+            # Single-line standard escaping
+            escaped = (
+                val.replace("\\", "\\\\")
+                .replace('"', '\\"')
+            )
+            lit_str = f'"{escaped}"'
+
+        # Language tag and datatype
+        if lit.language:
+            return f'{lit_str}@{lit.language}'
+        elif lit.datatype:
+            return f'{lit_str}^^<{lit.datatype}>'
+        else:
+            return lit_str
+
+    def close(self):
+        self.f.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
 class GraphManager:
-    def __init__(self, base_uri):
+    def __init__(self, base_uri, output_file=OUTPUT_FILE_NAME):
         self.base_uri = base_uri
-        self.graph = Graph(bind_namespaces= "none")
+        self.graph = StreamingTurtleWriter(output_file)
+
         self._bind_namespaces()
-        
+
     def _bind_namespaces(self):
-        """Bind all required namespaces to the graph"""
+        """Bind all required namespaces"""
         self.graph.bind("rdf", RDF)
-        self.graph.bind("rdfs", Namespace("http://www.w3.org/2000/01/rdf-schema#"))
+        self.graph.bind("rdfs", RDFS)
         self.graph.bind("rdfa", Namespace("https://www.w3.org/ns/rdfa#"))
         self.graph.bind("pav", PAV)
         self.graph.bind("xsd", XSD)
@@ -31,9 +153,9 @@ class GraphManager:
         self.graph.bind("schema", SDO)
         self.graph.bind("adms", ADMS)
         self.graph.bind("foaf", FOAF)
-    
+
     def create_uri(self, concept_name, code=None, version=None):
-        """Generate URIs for identity and versions."""
+        """Generate URIs for identity and versioned concepts"""
         uri = f"{self.base_uri}{concept_name}"
         if code:
             uri += f"/{code}"
@@ -41,6 +163,9 @@ class GraphManager:
             uri += f"/version/{version}"
         return URIRef(uri)
 
+    def close(self):
+        """Close the underlying writer"""
+        self.graph.close()
 
 class CatalogManager:
     def __init__(self, graph_manager):
@@ -85,13 +210,11 @@ class CodeListManager:
         self.levels_dict = {}  
         self.levels_info_all = []
 
-
     def add_versioning_relationships(self, version_uri, identity_uri):
         """Connect a version to its identity"""
-        self.vm.graph.add((version_uri, vl.identity, identity_uri))
-        self.vm.graph.add((identity_uri, vl.version, version_uri))
+        self.vm.graph.add((version_uri, vl.Identity, identity_uri))
+        self.vm.graph.add((identity_uri, vl.Version, version_uri))
     
-
     def mark_as_deprecated(self, identity_uri, valid_to=None):
         """Mark an identity as deprecated"""
         self.vm.graph.add((identity_uri, RDF.type, vl.Deprecated))
@@ -117,7 +240,6 @@ class CodeListManager:
         )
         return 1 + (self._calculate_depth(parent_entry, concept_data) if parent_entry else 0)
     
-
     def _create_all_level(self, ontology_uri, concept_data, is_version):
         """Create the top-level 'All' classification level"""
         if is_version:
@@ -144,7 +266,6 @@ class CodeListManager:
         
         return all_uri
 
-
     def _process_level_metadata(self, level_uri, level_title, level_depth, ontology_uri):
         """Add metadata for a classification level"""
         self.vm.graph.add((level_uri, RDF.type, XKOS.ClassificationLevel))
@@ -156,7 +277,6 @@ class CodeListManager:
                 self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
                 self.vm.graph.add((level_uri, SDO.name, Literal(title, lang=lang)))
        
-
     def _process_entry(self, entry, concept_data, ontology_uri, all_uri, is_version):
         """Process entry with version-identity handling and level management"""
         if is_version:
@@ -254,7 +374,6 @@ class CodeListManager:
             #     max_len = int(concept_data['codeListEntryValueMaxLength'])
             #     self.vm.graph.add((constraint_bnode, SHACL.maxLength, Literal(max_len, datatype=XSD.integer)))
 
-
     def _add_entry_metadata(self, entry_uri, entry, ontology_uri, all_uri, is_version):
         """Add all metadata for a single entry"""
         self.vm.graph.add((entry_uri, RDF.type, SKOS.Concept))
@@ -283,7 +402,6 @@ class CodeListManager:
                 self.vm.graph.add((entry_uri, DCTERMS.description, Literal(desc, lang=lang)))
                 self.vm.graph.add((entry_uri, SKOS.definition, Literal(desc, lang=lang)))
 
-
     def _handle_parent_relationship(self, entry, concept_data, entry_uri, is_version):
         """Handle parent-child relationships between entries"""
         if is_version:
@@ -302,7 +420,6 @@ class CodeListManager:
         
         for s, p, o in relationships:
             self.vm.graph.add((s, p, o))
-
 
     def add_annotations(self, concept_uri, annotations):
         """Handle annotations with special treatment for XKOS predicates"""
@@ -449,7 +566,6 @@ class ConceptMetadataManager:
         self.vm.graph.add((catalog_uri, SDO.dataset, uri))
         self.vm.graph.add((catalog_uri, FOAF.topic, uri))
     
-
     def _add_theme(self, concept_uri, theme, concept_id):
         """Add themes to concept"""
         theme_bnode = BNode()
@@ -465,7 +581,6 @@ class ConceptMetadataManager:
         
         self.vm.graph.add((concept_uri, DCTERMS.subject, theme_bnode))
     
-
     def _add_conforms_to(self, concept_uri, conformsTo_dict):
         """Add conformsTo information to concept"""
         conformTo_bnode = BNode()
@@ -482,7 +597,6 @@ class ConceptMetadataManager:
                         self.vm.graph.add((conformTo_bnode, SDO.name, Literal(name, lang=lang)))
             
             self.vm.graph.add((concept_uri, DCTERMS.conformsTo, conformTo_bnode))
-
 
     def add_concept_hierarchy(self, concept_uri, concept_data, is_version=False, level_depths=None, levels_dict=None, levels_info_all=None):
         """Add hierarchy structure for the concept including XKOS levels"""
@@ -522,7 +636,6 @@ class ConceptMetadataManager:
             self._add_xkos_level_information(concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data)
         
         return all_uri
-
 
     def _add_xkos_level_information(self, concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data):
         """Add XKOS level information to the concept scheme"""
@@ -575,5 +688,3 @@ class ConceptMetadataManager:
         if matching_levels:
             first_level_uri = URIRef(matching_levels[0]['uri'])
             self.vm.graph.add((all_uri, CUBELINK.nextInHierarchy, first_level_uri))
-
-
