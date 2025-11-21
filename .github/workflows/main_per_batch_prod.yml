@@ -165,8 +165,6 @@ jobs:
           sudo apt-get install -y raptor2-utils
           echo "Validating RDF file: $OUTPUT_FILE"
           rapper -i turtle -c "$OUTPUT_FILE"
-          echo "Triples count:"
-          rapper -i turtle "$OUTPUT_FILE" -o ntriples | wc -l
 
       - name: Archive batch results
         uses: actions/upload-artifact@v4
@@ -224,9 +222,6 @@ jobs:
               # Validation
               rapper -i turtle -c "$file"
 
-              # Triple count
-              echo -n "Triple count: "
-              rapper -i turtle "$file" -o ntriples | wc -l
             fi
           done
 
@@ -293,11 +288,12 @@ jobs:
 
               # Upload to Stardog
               response=$(curl -s -w "%{http_code}" \
-                -u "$STARDOG_USER:$STARDOG_PASSWORD" \
-                -H "Content-Type: text/turtle" \
-                --data-binary @"$file" \
-                -k \
-                "$STARDOG_URL?graph=$TARGET_GRAPH")
+              -u "$STARDOG_USER:$STARDOG_PASSWORD" \
+              -H "Content-Type: text/turtle" \
+              -X POST \
+              --data-binary @<(cat "$file") \
+              -k \
+              "$STARDOG_URL?graph=$TARGET_GRAPH")
 
               status=${response: -3}
               body=${response::-3}
