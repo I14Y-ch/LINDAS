@@ -273,7 +273,7 @@ jobs:
       - name: Upload all batches to Stardog
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
-          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
         run: |
           echo "Uploading all batch files to Stardog..."
           batch_count=0
