@@ -161,6 +161,8 @@ jobs:
         env:
           OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
         run: |
+          sudo apt-get update
+          sudo apt-get install -y raptor2-utils
           echo "Validating RDF file: $OUTPUT_FILE"
           rapper -i turtle -c "$OUTPUT_FILE"
           echo "Triples count:"
