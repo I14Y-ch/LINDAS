@@ -266,39 +266,40 @@ jobs:
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
-          run: |
-            python3 << 'EOF'
-            import os, glob
-            from stardog import Connection
+          STARDOG_URL: ${{ env.STARDOG_URL }}
+          TARGET_GRAPH: ${{ env.TARGET_GRAPH }}
+        run: |
+          python3 << 'EOF'
+          import os, glob
+          from stardog import Connection
 
-            stardog_user = os.environ['STARDOG_USER']
-            stardog_password = os.environ['STARDOG_PASSWORD']
-            stardog_url = os.environ['STARDOG_URL']
-            target_graph = os.environ['TARGET_GRAPH']
+          stardog_user = os.environ['STARDOG_USER']
+          stardog_password = os.environ['STARDOG_PASSWORD']
+          stardog_url = os.environ['STARDOG_URL']
+          target_graph = os.environ['TARGET_GRAPH']
 
-            conn = Connection(endpoint=stardog_url, username=stardog_user, password=stardog_password)
+          conn = Connection(endpoint=stardog_url, username=stardog_user, password=stardog_password)
 
-            batch_count = 0
-            failed_uploads = 0
+          batch_count = 0
+          failed_uploads = 0
 
-            for file in sorted(glob.glob("batches/*.ttl")):
-                try:
-                    with open(file, 'rb') as f:
-                        conn.add(data=f, graph=target_graph, content_type="text/turtle")
-                    print(f"SUCCESS: Uploaded {file}")
-                    batch_count += 1
-                except Exception as e:
-                    print(f"FAILED: {file} - {e}")
-                    failed_uploads += 1
+          for file in sorted(glob.glob("batches/*.ttl")):
+              try:
+                  with open(file, 'rb') as f:
+                      conn.add(data=f, graph=target_graph, content_type="text/turtle")
+                  print(f"SUCCESS: Uploaded {file}")
+                  batch_count += 1
+              except Exception as e:
+                  print(f"FAILED: {file} - {e}")
+                  failed_uploads += 1
 
-            print("----------------------------------------")
-            print(f"- Successful uploads: {batch_count} batches")
-            print(f"- Failed uploads: {failed_uploads}")
+          print("----------------------------------------")
+          print(f"- Successful uploads: {batch_count} batches")
+          print(f"- Failed uploads: {failed_uploads}")
 
-            if failed_uploads > 0:
-                exit(1)
-            EOF
-
+          if failed_uploads > 0:
+              exit(1)
+          EOF
   final-summary:
     needs: [get-concepts, process-batches, clear-and-upload]
     runs-on: ubuntu-latest
