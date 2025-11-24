@@ -272,7 +272,7 @@ jobs:
           python3 << 'EOF'
           import os, glob
           from urllib.parse import urlparse
-          from stardog import Connection, content
+          import stardog
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
@@ -292,37 +292,30 @@ jobs:
           print(f"Using endpoint: {endpoint}")
           print(f"Using database: {database}")
 
-          conn = Connection(
-              database=database,
-              endpoint=endpoint,
-              username=stardog_user,
-              password=stardog_password
-          )
+          conn_details = {
+            'endpoint': endpoint,
+            'username': stardog_user,
+            'password': stardog_password
+          }
 
           batch_count = 0
           failed_uploads = 0
 
-
-          tx = conn.begin()
-          try:
+          with stardog.Connection(database, **conn_details) as conn:
               for file_path in sorted(glob.glob("batches/*.ttl")):
                   try:
-                      file_content = content.File(file=file_path, content_type="text/turtle")
-                      tx.add(file_content, graph_uri=target_graph)
+                      file_content = stardog.content.File(file=file_path, content_type="text/turtle")
+                      conn.begin()
+                      conn.add(file_content)
+                      conn.commit()
                       batch_count += 1
                       print(f"SUCCESS: Uploaded {file_path}")
                   except Exception as e:
                       failed_uploads += 1
                       print(f"FAILED: {file_path} - {e}")
 
-              # Commit only if transaction itself is fine
-              tx.commit()
-              print("All batches committed successfully")
-
-          except Exception as e:
-              # If the transaction fails entirely (e.g., commit fails)
-              tx.rollback()
-              print(f"Transaction failed and rolled back: {e}")
+          # Commit only if transaction itself is fine
+          print("All batches committed successfully")
 
           print("----------------------------------------")
           print(f"- Files queued for commit: {batch_count}")
