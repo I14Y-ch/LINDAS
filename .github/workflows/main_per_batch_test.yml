@@ -10,7 +10,7 @@ env:
   PYTHON_VERSION: '3.10'
   STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
-  BATCH_SIZE: '50'  # strings in env; cast to int in code
+  BATCH_SIZE: '10'  # strings in env; cast to int in code
 
 jobs:
   get-concepts:
@@ -302,21 +302,15 @@ jobs:
           batch_count = 0
           failed_uploads = 0
 
-          conn.begin()
-
           for file_path in sorted(glob.glob("batches/*.ttl")):
-              try:
-                  # Create a File content object
-                  file_content = content.File(file=file_path, content_type="text/turtle")
-                  conn.add(file_content, graph_uri=target_graph)
-                  print(f"SUCCESS: Queued {file_path}")
-                  batch_count += 1
-              except Exception as e:
-                  print(f"FAILED to queue {file_path} - {e}")
-                  failed_uploads += 1
-
-          # Commit once
-          conn.commit()
+          try:
+              file_content = content.File(file=file_path, content_type="text/turtle")
+              conn.begin()
+              conn.add(file_content, graph_uri=target_graph)
+              conn.commit()
+              print(f"SUCCESS: Uploaded {file_path}")
+          except Exception as e:
+              print(f"FAILED: {file_path} - {e}")
 
           print("----------------------------------------")
           print(f"- Files queued for commit: {batch_count}")
