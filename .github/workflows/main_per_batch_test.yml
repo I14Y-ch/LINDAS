@@ -272,53 +272,55 @@ jobs:
           python3 << 'EOF'
           import os, glob
           from urllib.parse import urlparse
-          from stardog import Connection
+          from stardog import Connection, content
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
           stardog_url = os.environ['STARDOG_URL']
           target_graph = os.environ['TARGET_GRAPH']
 
-          # Extract the database name from the URL if it's the last segment
+          # Extract database from URL
           parsed = urlparse(stardog_url)
           path_parts = parsed.path.strip("/").split("/")
-
-          if len(path_parts) > 0 and path_parts[-1]:  # last segment is not empty
+          if len(path_parts) > 0 and path_parts[-1]:
               database = path_parts[-1]
-              # Rebuild the endpoint URL without the database part
-              endpoint = parsed._replace(path="/".join(path_parts[:-1])).geturl()
+              endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
           else:
-              database = os.environ.get("STARDOG_DATABASE")  # fallback if DB not in URL
+              database = os.environ.get("STARDOG_DATABASE")
               endpoint = stardog_url
 
           print(f"Using endpoint: {endpoint}")
           print(f"Using database: {database}")
 
-          # Initialize the Stardog connection with separate endpoint and database
           conn = Connection(
+              database=database,
               endpoint=endpoint,
               username=stardog_user,
-              password=stardog_password,
-              database=database
+              password=stardog_password
           )
 
           batch_count = 0
           failed_uploads = 0
 
-          # Loop through all batch files and upload them
-          for file in sorted(glob.glob("batches/*.ttl")):
+          conn.begin()
+
+          for file_path in sorted(glob.glob("batches/*.ttl")):
               try:
-                  with open(file, 'rb') as f:
-                      conn.add(data=f, graph=target_graph, content_type="text/turtle")
-                  print(f"SUCCESS: Uploaded {file}")
+                  # Create a File content object
+                  file_content = content.File(file=file_path, content_type="text/turtle")
+                  conn.add(file_content, graph_uri=target_graph)
+                  print(f"SUCCESS: Queued {file_path}")
                   batch_count += 1
               except Exception as e:
-                  print(f"FAILED: {file} - {e}")
+                  print(f"FAILED to queue {file_path} - {e}")
                   failed_uploads += 1
 
+          # Commit once
+          conn.commit()
+
           print("----------------------------------------")
-          print(f"- Successful uploads: {batch_count} batches")
-          print(f"- Failed uploads: {failed_uploads}")
+          print(f"- Files queued for commit: {batch_count}")
+          print(f"- Failed to queue: {failed_uploads}")
 
           if failed_uploads > 0:
               exit(1)
