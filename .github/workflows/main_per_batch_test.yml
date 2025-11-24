@@ -94,9 +94,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install rdflib requests
 
       - name: Calculate batch range
         id: calc-batch
@@ -161,8 +162,6 @@ jobs:
         env:
           OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
           echo "Validating RDF file: $OUTPUT_FILE"
           rapper -i turtle -c "$OUTPUT_FILE"
 
@@ -203,9 +202,6 @@ jobs:
 
       - name: List and validate batch files
         run: |
-          echo "Installing rapper..."
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
 
           echo "Downloaded batch files:"
           find batches -name "*.ttl" -type f | sort
@@ -224,7 +220,6 @@ jobs:
 
             fi
           done
-
       - name: Clear Stardog Graph
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
@@ -271,57 +266,38 @@ jobs:
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
-          echo "Uploading all batch files to Stardog..."
-          batch_count=0
-          total_triples=0
-          failed_uploads=0
+          run: |
+            python3 << 'EOF'
+            import os, glob
+            from stardog import Connection
 
-          for file in batches/*.ttl; do
-            if [ -f "$file" ]; then
-              echo "----------------------------------------"
-              echo "Uploading $(basename "$file")"
+            stardog_user = os.environ['STARDOG_USER']
+            stardog_password = os.environ['STARDOG_PASSWORD']
+            stardog_url = os.environ['STARDOG_URL']
+            target_graph = os.environ['TARGET_GRAPH']
 
-              # Count triples using rapper (streaming, fast)
-              triples=$(rapper -i turtle "$file" -o ntriples | wc -l)
-              echo "Triples in file: $triples"
+            conn = Connection(endpoint=stardog_url, username=stardog_user, password=stardog_password)
 
-              # Upload to Stardog
-              response=$(curl -s -w "%{http_code}" \
-              -u "$STARDOG_USER:$STARDOG_PASSWORD" \
-              -H "Content-Type: text/turtle" \
-              -X POST \
-              --data-binary @<(cat "$file") \
-              -k \
-              "$STARDOG_URL?graph=$TARGET_GRAPH")
+            batch_count = 0
+            failed_uploads = 0
 
-              status=${response: -3}
-              body=${response::-3}
+            for file in sorted(glob.glob("batches/*.ttl")):
+                try:
+                    with open(file, 'rb') as f:
+                        conn.add(data=f, graph=target_graph, content_type="text/turtle")
+                    print(f"SUCCESS: Uploaded {file}")
+                    batch_count += 1
+                except Exception as e:
+                    print(f"FAILED: {file} - {e}")
+                    failed_uploads += 1
 
-              if [[ "$status" == "200" ]]; then
-                echo "SUCCESS: Uploaded $(basename "$file")"
-                batch_count=$((batch_count + 1))
-                total_triples=$((total_triples + triples))
-              else
-                echo "FAILED: HTTP $status"
-                echo "Response (first 200 chars): ${body:0:200}"
-                failed_uploads=$((failed_uploads + 1))
-              fi
-            fi
-          done
+            print("----------------------------------------")
+            print(f"- Successful uploads: {batch_count} batches")
+            print(f"- Failed uploads: {failed_uploads}")
 
-          echo "----------------------------------------"
-          echo "Upload summary:"
-          echo "- Successful uploads: $batch_count batches"
-          echo "- Total triples uploaded: $total_triples"
-          echo "- Failed uploads: $failed_uploads"
-
-          if [ $failed_uploads -gt 0 ]; then
-            echo "ERROR: Some uploads failed."
-            exit 1
-          fi
+            if failed_uploads > 0:
+                exit(1)
+            EOF
 
   final-summary:
     needs: [get-concepts, process-batches, clear-and-upload]
