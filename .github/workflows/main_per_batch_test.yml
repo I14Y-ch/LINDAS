@@ -306,7 +306,7 @@ jobs:
                   try:
                       file_content = stardog.content.File(file=file_path, content_type="text/turtle")
                       conn.begin()
-                      conn.add(file_content)
+                      conn.add(file_content, graph_uri = target_graph)
                       conn.commit()
                       batch_count += 1
                       print(f"SUCCESS: Uploaded {file_path}")
