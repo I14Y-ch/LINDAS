@@ -301,8 +301,8 @@ jobs:
           batch_count = 0
           failed_uploads = 0
 
-          with stardog.Connection(database, **conn_details) as conn:
-              for file_path in sorted(glob.glob("batches/*.ttl")):
+          for file_path in sorted(glob.glob("batches/*.ttl")):
+              with stardog.Connection(database, **conn_details) as conn:
                   try:
                       file_content = stardog.content.File(file=file_path, content_type="text/turtle")
                       conn.begin()
