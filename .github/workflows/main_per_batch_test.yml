@@ -305,9 +305,7 @@ jobs:
           for file_path in sorted(glob.glob("batches/*.ttl")):
             try:
                 file_content = content.File(file=file_path, content_type="text/turtle")
-                conn.begin()
                 conn.add(file_content, graph_uri=target_graph)
-                conn.commit()
                 batch_count += 1
                 print(f"SUCCESS: Uploaded {file_path}")
             except Exception as e:
