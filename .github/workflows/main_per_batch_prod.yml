@@ -302,15 +302,17 @@ jobs:
           batch_count = 0
           failed_uploads = 0
 
-          for file_path in sorted(glob.glob("batches/*.ttl")):
-            try:
-                file_content = content.File(file=file_path, content_type="text/turtle")
-                conn.add(file_content, graph_uri=target_graph)
-                batch_count += 1
-                print(f"SUCCESS: Uploaded {file_path}")
-            except Exception as e:
-                failed_uploads += 1
-                print(f"FAILED: {file_path} - {e}")
+
+          with conn.transaction() as tx:
+            for file_path in sorted(glob.glob("batches/*.ttl")):
+              try:
+                  file_content = content.File(file=file_path, content_type="text/turtle")
+                  tx.add(file_content, graph_uri=target_graph)
+                  batch_count += 1
+                  print(f"SUCCESS: Uploaded {file_path}")
+              except Exception as e:
+                  failed_uploads += 1
+                  print(f"FAILED: {file_path} - {e}")
 
           print("----------------------------------------")
           print(f"- Files queued for commit: {batch_count}")
