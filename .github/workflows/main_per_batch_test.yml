@@ -10,7 +10,7 @@ env:
   PYTHON_VERSION: '3.10'
   STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
-  BATCH_SIZE: '10'  # strings in env; cast to int in code
+  BATCH_SIZE: '5'  # strings in env; cast to int in code
 
 jobs:
   get-concepts:
