@@ -271,6 +271,7 @@ jobs:
         run: |
           python3 << 'EOF'
           import os, glob
+          from urllib.parse import urlparse
           from stardog import Connection
 
           stardog_user = os.environ['STARDOG_USER']
@@ -278,11 +279,33 @@ jobs:
           stardog_url = os.environ['STARDOG_URL']
           target_graph = os.environ['TARGET_GRAPH']
 
-          conn = Connection(endpoint=stardog_url, username=stardog_user, password=stardog_password)
+          # Extract the database name from the URL if it's the last segment
+          parsed = urlparse(stardog_url)
+          path_parts = parsed.path.strip("/").split("/")
+
+          if len(path_parts) > 0 and path_parts[-1]:  # last segment is not empty
+              database = path_parts[-1]
+              # Rebuild the endpoint URL without the database part
+              endpoint = parsed._replace(path="/".join(path_parts[:-1])).geturl()
+          else:
+              database = os.environ.get("STARDOG_DATABASE")  # fallback if DB not in URL
+              endpoint = stardog_url
+
+          print(f"Using endpoint: {endpoint}")
+          print(f"Using database: {database}")
+
+          # Initialize the Stardog connection with separate endpoint and database
+          conn = Connection(
+              endpoint=endpoint,
+              username=stardog_user,
+              password=stardog_password,
+              database=database
+          )
 
           batch_count = 0
           failed_uploads = 0
 
+          # Loop through all batch files and upload them
           for file in sorted(glob.glob("batches/*.ttl")):
               try:
                   with open(file, 'rb') as f:
