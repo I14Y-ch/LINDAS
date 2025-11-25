@@ -253,7 +253,7 @@ jobs:
                   endpoint = stardog_url
 
               session = requests.Session()
-              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=None, **kwargs)
+              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
 
               conn_details = {
                   'endpoint': endpoint,
@@ -310,7 +310,7 @@ jobs:
           print(f"Using database: {database}")
 
           session = requests.Session()
-          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=None, **kwargs)
+          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
 
           conn_details = {
               'endpoint': endpoint,

@@ -205,6 +205,7 @@ jobs:
           import os
           from urllib.parse import urlparse
           import stardog
+          import requests
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
@@ -227,10 +228,14 @@ jobs:
                   database = os.environ.get("STARDOG_DATABASE")
                   endpoint = stardog_url
 
+              session = requests.Session()
+              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
+
               conn_details = {
                   'endpoint': endpoint,
                   'username': stardog_user,
-                  'password': stardog_password
+                  'password': stardog_password,
+                  "session": session
               }
 
               with stardog.Connection(database, **conn_details) as conn:
@@ -259,10 +264,13 @@ jobs:
           import os, glob
           from urllib.parse import urlparse
           import stardog
+          import requests
+
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
           stardog_url = os.environ['STARDOG_URL']
           target_graph = os.environ['TARGET_GRAPH']
+
           # Extract database from URL
           parsed = urlparse(stardog_url)
           path_parts = parsed.path.strip("/").split("/")
@@ -272,15 +280,23 @@ jobs:
           else:
               database = os.environ.get("STARDOG_DATABASE")
               endpoint = stardog_url
+
           print(f"Using endpoint: {endpoint}")
           print(f"Using database: {database}")
+
+          session = requests.Session()
+          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
+
           conn_details = {
-            'endpoint': endpoint,
-            'username': stardog_user,
-            'password': stardog_password
+              'endpoint': endpoint,
+              'username': stardog_user,
+              'password': stardog_password,
+              "session": session
           }
+
           batch_count = 0
           failed_uploads = 0
+
           with stardog.Connection(database, **conn_details) as conn:
               for file_path in sorted(glob.glob("batches/*.ttl")):
                   try:
@@ -293,12 +309,15 @@ jobs:
                   except Exception as e:
                       failed_uploads += 1
                       print(f"FAILED: {file_path} - {e}")
+
           # Commit only if transaction itself is fine
           if failed_uploads == 0:
             print("All batches committed successfully")
+
           print("----------------------------------------")
           print(f"- Files queued for commit: {batch_count}")
           print(f"- Failed to queue: {failed_uploads}")
+
           if failed_uploads > 0:
               exit(1)
           EOF
