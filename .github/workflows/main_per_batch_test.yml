@@ -234,7 +234,9 @@ jobs:
               }
 
               with stardog.Connection(database, **conn_details) as conn:
+                  conn.begin()
                   conn.clear(graph_uri=target_graph)
+                  conn.commit()
 
           except Exception as e:
               print(f'Error clearing graph: {e}')
