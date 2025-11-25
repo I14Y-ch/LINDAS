@@ -226,37 +226,40 @@ jobs:
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
         run: |
           python3 << 'EOF'
-          import os, warnings, requests
-          warnings.filterwarnings('ignore')
-          from requests.auth import HTTPBasicAuth
-          
+          import os
+          from urllib.parse import urlparse
+          import stardog
+
+          stardog_user = os.environ['STARDOG_USER']
+          stardog_password = os.environ['STARDOG_PASSWORD']
+          stardog_url = os.environ['STARDOG_URL']
+          target_graph = os.environ['TARGET_GRAPH']
+
           try:
-              auth = HTTPBasicAuth(os.environ['STARDOG_USER'], os.environ['STARDOG_PASSWORD'])
-              url = os.environ['STARDOG_URL'].rstrip('/') + '/update'
-              target = os.environ['TARGET_GRAPH']
-              
-              print(f'Clearing graph: {target}')
-              print(f'Using URL: {url}')
-              print(f'Using user: {os.environ["STARDOG_USER"]}')
-              
-              r = requests.post(
-                  url,
-                  headers={'Content-Type': 'application/sparql-update'},
-                  auth=auth,
-                  data=f'CLEAR GRAPH <{target}>',
-                  verify=False
-              )
-              
-              print(f'Response status: {r.status_code}')
-              print(f'Response headers: {dict(r.headers)}')
-              
-              if r.status_code == 200:
-                  print('Graph cleared successfully - ready for final upload')
+              print(f'Clearing graph: {target_graph}')
+              print(f'Using URL: {stardog_url}')
+              print(f'Using user: {stardog_user}')
+
+              # Extract database from URL
+              parsed = urlparse(stardog_url)
+              path_parts = parsed.path.strip("/").split("/")
+
+              if len(path_parts) > 0 and path_parts[-1]:
+                  database = path_parts[-1]
+                  endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
               else:
-                  print(f'Response text: {r.text}')
-                  # Try to continue anyway - maybe the graph didn't exist
-                  print('Warning: Clear operation failed, but continuing with upload')
-                  
+                  database = os.environ.get("STARDOG_DATABASE")
+                  endpoint = stardog_url
+
+              conn_details = {
+                  'endpoint': endpoint,
+                  'username': stardog_user,
+                  'password': stardog_password
+              }
+
+              with stardog.Connection(database, **conn_details) as conn:
+                  conn.clear(graph_uri=target_graph)
+
           except Exception as e:
               print(f'Error clearing graph: {e}')
               print('Warning: Clear operation failed, but continuing with upload')
