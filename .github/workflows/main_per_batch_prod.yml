@@ -229,6 +229,7 @@ jobs:
           import os
           from urllib.parse import urlparse
           import stardog
+          import requests
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
@@ -251,10 +252,14 @@ jobs:
                   database = os.environ.get("STARDOG_DATABASE")
                   endpoint = stardog_url
 
+              session = requests.Session()
+              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=None, **kwargs)
+
               conn_details = {
                   'endpoint': endpoint,
                   'username': stardog_user,
-                  'password': stardog_password
+                  'password': stardog_password,
+                  "session": session
               }
 
               with stardog.Connection(database, **conn_details) as conn:
@@ -278,6 +283,7 @@ jobs:
           import os, glob
           from urllib.parse import urlparse
           import stardog
+          import requests
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
@@ -297,10 +303,14 @@ jobs:
           print(f"Using endpoint: {endpoint}")
           print(f"Using database: {database}")
 
+          session = requests.Session()
+          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=None, **kwargs)
+
           conn_details = {
-            'endpoint': endpoint,
-            'username': stardog_user,
-            'password': stardog_password
+              'endpoint': endpoint,
+              'username': stardog_user,
+              'password': stardog_password,
+              "session": session
           }
 
           batch_count = 0
@@ -320,7 +330,8 @@ jobs:
                       print(f"FAILED: {file_path} - {e}")
 
           # Commit only if transaction itself is fine
-          print("All batches committed successfully")
+          if failed_uploads == 0:
+            print("All batches committed successfully")
 
           print("----------------------------------------")
           print(f"- Files queued for commit: {batch_count}")

@@ -288,7 +288,8 @@ jobs:
                       failed_uploads += 1
                       print(f"FAILED: {file_path} - {e}")
           # Commit only if transaction itself is fine
-          print("All batches committed successfully")
+          if failed_uploads == 0:
+            print("All batches committed successfully")
           print("----------------------------------------")
           print(f"- Files queued for commit: {batch_count}")
           print(f"- Failed to queue: {failed_uploads}")
