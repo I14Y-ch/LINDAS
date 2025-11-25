@@ -265,10 +265,9 @@ jobs:
               with stardog.Connection(database, **conn_details) as conn:
                   conn.begin()
                   try:
-                      conn.update(f"DROP GRAPH <{target_graph}>")
-                      conn.update(f"CREATE GRAPH <{target_graph}>")
+                      conn.clear(graph_uri=target_graph)
                       conn.commit()
-                      print(f"Graph {target_graph} dropped and recreated successfully")
+                      print(f"Graph {target_graph} cleared successfully")
                   except Exception as e:
                       conn.rollback()
                       print(f"Error: {e}")
