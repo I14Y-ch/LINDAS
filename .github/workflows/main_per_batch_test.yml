@@ -206,6 +206,7 @@ jobs:
           from urllib.parse import urlparse
           import stardog
           import requests
+          import time
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
@@ -247,6 +248,7 @@ jobs:
                   except Exception as e:
                       conn.rollback()
                       print(f"Error: {e}")
+                      time.sleep(60)
 
           except Exception as e:
               print(f'Error clearing graph: {e}')
