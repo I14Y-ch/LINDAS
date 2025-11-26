@@ -76,7 +76,7 @@ class VersionProcessor:
         entry_identity_uri = self.vm.create_uri(concept_data['identifier'], entry['code'])
         self.codelist._process_entry(entry,concept_data,identity_uri,identity_all_uri,is_version=False)
 
-        # self.codelist.add_versioning_relationships(entry_version_uri, entry_identity_uri)
+        self.codelist.add_versioning_relationships(entry_version_uri, entry_identity_uri)
 
     def _process_latest_version(self, concept_data):
         """Process latest version"""
@@ -128,27 +128,27 @@ class VersionProcessor:
 
             self.codelist._process_entry(entry, version_data,version_uri,version_all_uri,is_version=True)
 
-            # if next_version_data and entry['code'] in {e['code'] for e in next_version_data.get('codeListEntries', [])}:
-            #     next_entry_uri = self.vm.create_uri(version_data['identifier'], entry['code'], next_version_data['version'] )
-            #     self.vm.graph.add((entry_version_uri, vl.successor, next_entry_uri))
-            #     self.vm.graph.add((next_entry_uri, vl.predecessor, entry_version_uri))
+            if next_version_data and entry['code'] in {e['code'] for e in next_version_data.get('codeListEntries', [])}:
+                next_entry_uri = self.vm.create_uri(version_data['identifier'], entry['code'], next_version_data['version'] )
+                self.vm.graph.add((entry_version_uri, vl.successor, next_entry_uri))
+                self.vm.graph.add((next_entry_uri, vl.predecessor, entry_version_uri))
 
         # Add the level information after processing all entries
         self._add_level_information_to_hierarchy(version_uri, version_all_uri, version_data,is_version=True)
 
-        # if next_version_data:
-        #     deleted_entries = VersionDiff.find_deleted_entries(version_data, next_version_data)
-        #     for code in deleted_entries:
-        #         entry = next(e for e in version_data['codeListEntries'] if e['code'] == code)
-        #         entry_version_uri = self.vm.create_uri(version_data['identifier'], code,version_data['version'])
+        if next_version_data:
+            deleted_entries = VersionDiff.find_deleted_entries(version_data, next_version_data)
+            for code in deleted_entries:
+                entry = next(e for e in version_data['codeListEntries'] if e['code'] == code)
+                entry_version_uri = self.vm.create_uri(version_data['identifier'], code,version_data['version'])
 
-        #         # Mark as deprecated in identity
-        #         entry_identity_uri = self.vm.create_uri(version_data['identifier'], code)
-        #         self.codelist.mark_as_deprecated(entry_identity_uri,valid_to=version_data.get('validTo'))
+                # Mark as deprecated in identity
+                entry_identity_uri = self.vm.create_uri(version_data['identifier'], code)
+                self.codelist.mark_as_deprecated(entry_identity_uri,valid_to=version_data.get('validTo'))
 
-        #         self.codelist.add_versioning_relationships(entry_version_uri, entry_identity_uri)
+                self.codelist.add_versioning_relationships(entry_version_uri, entry_identity_uri)
 
-        #         self.codelist._process_entry(entry,version_data,identity_uri,identity_all_uri,is_version=False)
+                self.codelist._process_entry(entry,version_data,identity_uri,identity_all_uri,is_version=False)
 
         if next_version_data:
             next_version_uri = self.vm.create_uri(version_data['identifier'], version=next_version_data['version'])
