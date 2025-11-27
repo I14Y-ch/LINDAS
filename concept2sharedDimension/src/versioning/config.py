@@ -29,6 +29,7 @@ SKOLEM_VERSION_BASE_URI = "https://register.ld.admin.ch/i14y/concept/{concept_id
 # API_TOKEN = "" # not necessary for prod and public concepts
 BASE_API_URL = "https://api.i14y.admin.ch/api/public/v1/concepts/"
 VERSION_API_URL = "https://dcat.app.cfap02.atlantica.admin.ch/api/Concepts/"
+LINDAS_SPARQL_URL = "https://lindas.admin.ch/query"
 
 # namespace
 SDO = Namespace("http://schema.org/")
