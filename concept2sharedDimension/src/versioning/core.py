@@ -1,50 +1,183 @@
 from collections import defaultdict
-from rdflib import URIRef, Literal, Namespace, BNode, Graph
+from rdflib import RDFS, URIRef, Literal, Namespace, BNode, Graph
 from rdflib.namespace import DCTERMS, XSD, RDF, SKOS, OWL, DCTERMS, PROV, FOAF, VOID
 from .utils import is_valid_value, timer
 from .config import *
-
 from pathlib import Path
-from rdflib import URIRef, BNode, Literal, Namespace, RDF, RDFS, XSD
-
-import hashlib
-from pathlib import Path
+from collections import defaultdict
 from rdflib import URIRef, BNode, Literal
+from rdflib.namespace import RDF
+import hashlib
 
 class StreamingTurtleWriter:
     """
-    Turtle writer compatible with rdflib.Graph.add().
-    Writes triples directly to a Turtle file on disk while preserving
-    literals, blank nodes, and escaping like rdflib would.
-    Deduplicates triples using SHA256 hashes.
+    Streaming Turtle writer with:
+      - rdflib-compatible literal formatting
+      - deterministic skolemization for blank nodes
+      - triple deduplication
+      - prefix support
     """
-    def __init__(self, filename):
+
+    def __init__(
+        self,
+        filename,
+        skolem_base_identity=SKOLEM_IDENTITY_BASE_URI,
+        skolem_base_version=SKOLEM_VERSION_BASE_URI,
+        enable_skolem=True,
+    ):
         self.filename = Path(filename)
         self.f = self.filename.open("w", encoding="utf-8")
+
         self.prefixes = {}
-        self.bnode_map = {}       # deterministic mapping of BNodes
-        self.seen_hashes = set()  # store hashes of triples to deduplicate
+        self.seen_hashes = set()
         self.types_by_subject = defaultdict(set)
 
+        # Skolemization
+        self.enable_skolem = enable_skolem
+        self.skolem_base_identity = skolem_base_identity.rstrip("/") + "/"
+        self.skolem_base_version = skolem_base_version.rstrip("/") + "/"
+        self.current_concept_identifier = "default"
+        self.current_concept_version = "1.0.0"
+        self.is_version = False
+
+        self.skolem_map = {}               # BNode -> IRIRef
+        self.bnode_triples = defaultdict(list)  # BNode -> list of triples defining structure
+
     def bind(self, prefix, uri):
-        """Bind a namespace prefix (compatible with graph.bind())"""
+        """Bind prefix, exactly like rdflib.Graph.bind()."""
         self.prefixes[prefix] = uri
         self.f.write(f"@prefix {prefix}: <{uri}> .\n")
 
+    def set_current_identifier_version(self, identifier, version):
+        self.current_concept_identifier = identifier
+        self.current_concept_version = version
+
+    def set_is_version(self,is_version):
+        self.is_version = is_version
+
+    def _canonical_hash_for_bnode(self, node):
+        """Stable hash computed from the bnode's outgoing triples."""
+        triples = self.bnode_triples[node]
+
+        # We mix in the current concept identifier with its version to avoid hash collisions between BNodes from different concepts
+        parts = [self.current_concept_identifier, self.current_concept_version]
+        for (s, p, o) in triples:
+            p_str = str(p)
+
+            if isinstance(o, URIRef):
+                o_str = f"U_o:{o}"
+            elif isinstance(o, Literal):
+                o_str = f"L_o:{o}"
+            elif isinstance(o, BNode):
+                o_str = "B_o:?"       # do NOT recurse!
+            else:
+                o_str = f"O:{o}"
+
+            if isinstance(s, URIRef):
+                s_str = f"U_s:{s}"
+            elif isinstance(s, Literal):
+                s_str = f"L_s:{s}"
+            elif isinstance(s, BNode):
+                s_str = "B_s:?"       # do NOT recurse!
+            else:
+                s_str = f"S:{s}"
+
+            parts.append(f"{s_str}|{p_str}|{o_str}")
+
+        canonical = ";".join(sorted(parts))
+        return hashlib.blake2s(canonical.encode("utf-8"), digest_size=16).hexdigest()
+
+    def _skolemize(self, bnode):
+        """Generate a deterministic IRI for a BNode."""
+        if bnode not in self.skolem_map:
+            h = self._canonical_hash_for_bnode(bnode)
+
+            if self.is_version:
+                template = self.skolem_base_version
+                args = {
+                    "concept_identifier": self.current_concept_identifier,
+                    "version": self.current_concept_version,
+                    "hash": h,
+                }
+            else:
+                template = self.skolem_base_identity
+                args = {
+                    "concept_identifier": self.current_concept_identifier,
+                    "hash": h,
+                }
+
+            self.skolem_map[bnode] = URIRef(template.format(**args))
+
+        return self.skolem_map[bnode]
+
     def add(self, triple):
-        """Add a triple to the Turtle file if not already seen"""
+        s, p, o = triple
+
+        # Track BNode structure BEFORE skolemizing
+        if isinstance(s, BNode):
+            self.bnode_triples[s].append((s, p, o))
+        if isinstance(o, BNode):
+            self.bnode_triples[o].append((s, p, o))
+
+        # triple hash
         h = self._triple_hash(triple)
         if h in self.seen_hashes:
-            return  # skip duplicate
+            return
         self.seen_hashes.add(h)
 
-        s, p, o = triple
-        line = f"{self._format_node(s)} {self._format_node(p)} {self._format_node(o)} .\n"
-        self.f.write(line)
+        # Write triple
+        self.f.write(
+            f"{self._format_node(s)} "
+            f"{self._format_node(p)} "
+            f"{self._format_node(o)} .\n"
+        )
 
-        # We add this to memory to count the number of versions and concepts at the end
+        # Track types
         if p == RDF.type:
             self.types_by_subject[s].add(o)
+
+    def _triple_hash(self, triple):
+        s, p, o = triple
+        return hashlib.sha256(
+            f"{self._format_node(s)} "
+            f"{self._format_node(p)} "
+            f"{self._format_node(o)}"
+            .encode("utf-8")
+        ).hexdigest()
+
+    def _format_node(self, node):
+        if isinstance(node, URIRef):
+            return f"<{node}>"
+
+        if isinstance(node, BNode):
+            if self.enable_skolem:
+                return f"<{self._skolemize(node)}>"
+            else:
+                # deterministic but human-readable bnode label
+                return f"_:{hashlib.sha1(str(node).encode()).hexdigest()[:8]}"
+
+        if isinstance(node, Literal):
+            return self._format_literal(node)
+
+        return f"\"{str(node)}\""
+
+    def _format_literal(self, lit: Literal):
+        """EXACT rdflib-compatible escaping."""
+        val = str(lit).replace("\r\n", "\n").replace("\r", "\n")
+
+        escaped = (
+            val.replace("\\", "\\\\")
+               .replace('"', '\\"')
+               .replace("\n", "\\n")
+        )
+
+        lit_str = f"\"{escaped}\""
+
+        if lit.language:
+            return f"{lit_str}@{lit.language}"
+        if lit.datatype:
+            return f"{lit_str}^^<{lit.datatype}>"
+        return lit_str
 
     def final_counts(self):
         concept_count = 0
@@ -58,63 +191,6 @@ class StreamingTurtleWriter:
                 version_count += 1
 
         return concept_count, version_count
-
-    def _triple_hash(self, triple):
-        """Compute SHA256 hash of a triple for deduplication"""
-        s, p, o = triple
-        # Convert each component to string like it would appear in the file
-        s_str = self._format_node(s)
-        p_str = self._format_node(p)
-        o_str = self._format_node(o)
-        triple_bytes = f"{s_str} {p_str} {o_str}".encode("utf-8")
-        return hashlib.sha256(triple_bytes).hexdigest()
-
-    def _format_node(self, node):
-        """Format a node in Turtle syntax like rdflib would"""
-        if isinstance(node, URIRef):
-            return f"<{str(node)}>"
-        elif isinstance(node, BNode):
-            # deterministic BNode mapping
-            if node not in self.bnode_map:
-                self.bnode_map[node] = f"b{len(self.bnode_map)+1}"
-            return f"_:{self.bnode_map[node]}"
-        elif isinstance(node, Literal):
-            return self._format_literal(node)
-        else:
-            return f'"{str(node)}"'
-
-    def _format_literal(self, lit: Literal) -> str:
-        """Format Literal with rdflib-compatible escaping."""
-        val = str(lit)
-
-        # Normalize line endings (CRLF/CR → LF) — rdflib does this internally
-        val = val.replace("\r\n", "\n").replace("\r", "\n")
-
-        # MULTILINE handling
-        if "\n" in val:
-            # rdflib uses escaped \n inside "..." instead of """..."""
-            escaped = (
-                val.replace("\\", "\\\\")     # escape backslashes
-                .replace('"', '\\"')       # escape quotes
-                .replace("\n", "\\n")      # TURN real newlines INTO \n
-            )
-            lit_str = f'"{escaped}"'
-
-        else:
-            # Single-line standard escaping
-            escaped = (
-                val.replace("\\", "\\\\")
-                .replace('"', '\\"')
-            )
-            lit_str = f'"{escaped}"'
-
-        # Language tag and datatype
-        if lit.language:
-            return f'{lit_str}@{lit.language}'
-        elif lit.datatype:
-            return f'{lit_str}^^<{lit.datatype}>'
-        else:
-            return lit_str
 
     def close(self):
         self.f.close()
@@ -131,6 +207,12 @@ class GraphManager:
         self.graph = StreamingTurtleWriter(output_file)
 
         self._bind_namespaces()
+
+    def set_current_identifier_version(self,identifier,version):
+        self.graph.set_current_identifier_version(identifier,version)
+
+    def set_is_version(self,is_version):
+        self.graph.set_is_version(is_version)
 
     def _bind_namespaces(self):
         """Bind all required namespaces"""
@@ -448,10 +530,10 @@ class CodeListManager:
 
             # Handle all other annotation types with full annotation structure
             annotation_node = BNode()
+            self.vm.graph.add((concept_uri, SDO.hasPart, annotation_node))
             self.vm.graph.add((annotation_node, RDF.type, oa.Annotation))
             self.vm.graph.add((annotation_node, oa.hasTarget, concept_uri))
             # self.vm.graph.add((concept_uri, DCTERMS.hasPart, annotation_node))
-            self.vm.graph.add((concept_uri, SDO.hasPart, annotation_node))
 
             body_node = BNode()
             self.vm.graph.add((annotation_node, oa.hasBody, body_node))
@@ -460,11 +542,11 @@ class CodeListManager:
             # Add text values if present
             for lang, text in text_data.items():
                 if is_valid_value(text):
+                    self.vm.graph.add((body_node, RDF.value, Literal(text.strip(), lang=lang)))
                     if not first_text_added:
                         self.vm.graph.add((body_node, RDF.type, URIRef("http://www.w3.org/2011/content#ContentAsText")))
                         self.vm.graph.add((body_node, DCTERMS.format, Literal("text/plain")))
                         first_text_added = True
-                    self.vm.graph.add((body_node, RDF.value, Literal(text.strip(), lang=lang)))
 
             # Add title if present
             title = annotation.get("title")
@@ -491,33 +573,37 @@ class CodeListManager:
 class ConceptMetadataManager:
     def __init__(self, version_manager):
         self.vm = version_manager
-    
+
     def add_scheme_metadata(self, uri, concept_data, linked_uri=None, is_version=None):
         """Add metadata to identity and version objects."""
+
+        # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
+        self.vm.set_is_version(is_version)
+
         # self.vm.graph.add((uri, RDF.type, SKOS.ConceptScheme))
         self.vm.graph.add((uri, RDF.type, SDO.DefinedTermSet))
-        #self.vm.graph.add((uri, RDF.type, meta.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
+        # self.vm.graph.add((uri, RDF.type, meta.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
         self.vm.graph.add((uri, RDF.type, vl.Version if is_version else vl.Identity))
 
         self.vm.graph.add((uri, PAV.version, Literal(concept_data['version'])))
-        
+
         # SHACL property for cube creator
         shacl_property = BNode()
         self.vm.graph.add((uri, SHACL.property, shacl_property))
         self.vm.graph.add((shacl_property, QUDT.scaleType, URIRef('http://qudt.org/schema/qudt/Nominal')))
-   
+
         # self.vm.graph.add((uri, DCTERMS.identifier, Literal(concept_data["identifier"])))
         self.vm.graph.add((uri, SDO.identifier, Literal(concept_data["identifier"])))
-        
+
         self.vm.graph.add((uri, SDO.validFrom, Literal(concept_data["validFrom"], datatype=XSD.date)))
         if 'validTo' in concept_data:
             self.vm.graph.add((uri, SDO.validUntil, Literal(concept_data["validTo"], datatype=XSD.date)))
-        
+
         for lang, publisher_name in concept_data["publisher"]["name"].items():
             if  is_valid_value(publisher_name):
                 self.vm.graph.add((uri, DCTERMS.publisher, Literal(publisher_name, lang=lang)))
 
-        #added Version and identity to the name of the Concept to differentiate        
+        # added Version and identity to the name of the Concept to differentiate
         modified_names = {}
         for lang, name in concept_data["name"].items():
             if is_valid_value(name):
@@ -528,71 +614,70 @@ class ConceptMetadataManager:
                         # self.vm.graph.add((uri, SKOS.prefLabel, Literal(name, lang=lang)))
                         self.vm.graph.add((uri, SDO.name, Literal(name, lang=lang)))
                         # self.vm.graph.add((uri, DCTERMS.title, Literal(name, lang=lang)))
-                    
-        
+
         for lang, desc in concept_data["description"].items():
             if  is_valid_value(desc):
                 self.vm.graph.add((uri, SDO.description, Literal(desc, lang=lang)))
                 # self.vm.graph.add((uri, DCTERMS.description, Literal(desc, lang=lang)))
                 # self.vm.graph.add((uri, SKOS.definition, Literal(desc, lang=lang)))
-        
+
         if concept_data.get("keywords"):
             for keyword_dict in concept_data["keywords"]:
                 for lang, word in keyword_dict.items():
                     if  is_valid_value(word):
                         self.vm.graph.add((uri, SDO.keywords, Literal(word, lang=lang)))
-        
+
         if "registrationStatus" in concept_data:
             self.vm.graph.add((uri, ADMS.status, Literal(concept_data["registrationStatus"])))
-            
+
         i14y_url = f"https://www.i14y.admin.ch/en/concepts/{concept_data['id']}/description"
         self.vm.graph.add((uri, PROV.wasDerivedFrom, URIRef(i14y_url)))
         # self.vm.graph.add((uri, PROV.hadPrimarySource, URIRef(i14y_url)))
-        
+
         if "themes" in concept_data:
             for theme in concept_data["themes"]:
                 self._add_theme(uri, theme, concept_data['id'])
-        
+
         if concept_data.get('conformsTo'):
             for conformsTo_dict in concept_data['conformsTo']:
                 self._add_conforms_to(uri, conformsTo_dict)
-        
+
         # connect Concept to I14Y catalog
         catalog_uri = URIRef("https://register.ld.admin.ch/i14y/.well-known/void")
         self.vm.graph.add((uri, SDO.includedInDataCatalog, catalog_uri))
         self.vm.graph.add((catalog_uri, SDO.dataset, uri))
         # self.vm.graph.add((catalog_uri, FOAF.topic, uri))
-    
+
     def _add_theme(self, concept_uri, theme, concept_id):
         """Add themes to concept"""
         theme_bnode = BNode()
         theme_uri = f"https://www.i14y.admin.ch/catalog/concepts/{concept_id}/content/{theme['code']}"
-        
+
         # self.vm.graph.add((theme_bnode, DCTERMS.identifier, URIRef(theme_uri)))
         self.vm.graph.add((theme_bnode, SDO.identifier, URIRef(theme_uri)))
-        
+
         for lang, theme_name in theme["name"].items():
             if  is_valid_value(theme_name):
                 # self.vm.graph.add((theme_bnode, SKOS.prefLabel, Literal(theme_name, lang=lang)))
                 self.vm.graph.add((theme_bnode, SDO.name, Literal(theme_name, lang=lang)))
-        
+
         self.vm.graph.add((concept_uri, DCTERMS.subject, theme_bnode))
-    
+
     def _add_conforms_to(self, concept_uri, conformsTo_dict):
         """Add conformsTo information to concept"""
         conformTo_bnode = BNode()
         uri_ct = conformsTo_dict.get('uri')
-        
+
         if uri_ct:
             # self.vm.graph.add((conformTo_bnode, DCTERMS.identifier, URIRef(uri_ct)))
             self.vm.graph.add((conformTo_bnode, SDO.identifier, URIRef(uri_ct)))
-            
+
             if 'label' in conformsTo_dict:
                 for lang, name in conformsTo_dict["label"].items():
                     if  is_valid_value(name):
                         # self.vm.graph.add((conformTo_bnode, SKOS.prefLabel, Literal(name, lang=lang)))
                         self.vm.graph.add((conformTo_bnode, SDO.name, Literal(name, lang=lang)))
-            
+
             self.vm.graph.add((concept_uri, DCTERMS.conformsTo, conformTo_bnode))
 
     def add_concept_hierarchy(self, concept_uri, concept_data, is_version=False, level_depths=None, levels_dict=None, levels_info_all=None):
@@ -603,61 +688,67 @@ class ConceptMetadataManager:
             levels_dict = {}
         if levels_info_all is None:
             levels_info_all = []
-        
+
+        # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
+        self.vm.set_is_version(is_version)
+
         # Create 'All' level
         if is_version:
             all_uri = self.vm.create_uri(concept_data['identifier'], "all", concept_data['version'])
         else:
             all_uri = self.vm.create_uri(concept_data['identifier'], "all")
-        
+
         self.vm.graph.add((all_uri, RDF.type, XKOS.ClassificationLevel))
         self.vm.graph.add((all_uri, SDO.inDefinedTermSet, concept_uri))
         self.vm.graph.add((all_uri, SKOS.prefLabel, Literal("All", lang="en")))
-        
+
         # Create hierarchy structure
         hierarchy = BNode()
         self.vm.graph.add((concept_uri, CUBELINK.inHierarchy, hierarchy))
         self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
-        
+
         hierarchy_name = (
             f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}" 
             if is_version else 
             f"Identity Hierarchy - {concept_data['identifier']}"
         )
-        
+
         self.vm.graph.add((hierarchy, SDO.name, Literal(hierarchy_name)))
         # self.vm.graph.add((hierarchy, SKOS.prefLabel, Literal(hierarchy_name)))
         self.vm.graph.add((hierarchy, CUBELINK.hierarchyRoot, all_uri))
-        
+
         if level_depths:
             self._add_xkos_level_information(concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data)
-        
+
         return all_uri
 
     def _add_xkos_level_information(self, concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data):
         """Add XKOS level information to the concept scheme"""
         max_level_depth = max(level_depths.values(), default=1)
         self.vm.graph.add((concept_uri, XKOS.numberOfLevels, Literal(max_level_depth, datatype=XSD.integer)))
-        
+
         sorted_levels = sorted(levels_info_all, key=lambda x: x['depth'])
         previous_level_uri = all_uri
-        
+
+        # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
+        self.vm.set_is_version(is_version)
+
         # Link the concept scheme to all levels (only for the current type - version or identity)
         # self.vm.graph.add((concept_uri, XKOS.hasPart, all_uri))
         # self.vm.graph.add((concept_uri, dataCite.haspart, all_uri))
         self.vm.graph.add((concept_uri, SDO.hasPart, all_uri))
-        
+
         for level in sorted_levels:
             level_uri = URIRef(level['uri'])
-            
+
             # Only process levels that match current type (version or identity)
             if is_version == ('version' in str(level_uri)):
-          
+
                 # self.vm.graph.add((concept_uri, XKOS.levels, level_uri))
                 # self.vm.graph.add((concept_uri, XKOS.hasPart, level_uri))
                 # self.vm.graph.add((concept_uri, dataCite.haspart, level_uri))
                 self.vm.graph.add((concept_uri, SDO.hasPart, level_uri))
-            
+
                 self.vm.graph.add((level_uri, RDF.type, XKOS.ClassificationLevel))
                 self.vm.graph.add((level_uri, XKOS.depth, Literal(level['depth'], datatype=XSD.integer)))
 
@@ -665,23 +756,23 @@ class ConceptMetadataManager:
                     if  is_valid_value(title):
                         # self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
                         self.vm.graph.add((level_uri, SDO.name, Literal(title, lang=lang)))
-                
+
                 for entry in levels_dict.get(level['depth'], []):
                     if is_version:
                         entry_uri = self.vm.create_uri(concept_data['identifier'],  entry['code'], concept_data['version'])
                     else:
                         entry_uri = self.vm.create_uri(concept_data['identifier'], entry['code'])
-                    
+
                     self.vm.graph.add((level_uri, SKOS.member, entry_uri))
-                   
+
                 if previous_level_uri and (is_version == ('version' in str(previous_level_uri))):
                     self.vm.graph.add((previous_level_uri, CUBELINK.nextInHierarchy, level_uri))
                 previous_level_uri = level_uri
-        
+
         # Link from 'All' to first level of same type if exists
         matching_levels = [level for level in sorted_levels 
                         if is_version == ('version' in str(URIRef(level['uri'])))]
-        
+
         if matching_levels:
             first_level_uri = URIRef(matching_levels[0]['uri'])
             self.vm.graph.add((all_uri, CUBELINK.nextInHierarchy, first_level_uri))

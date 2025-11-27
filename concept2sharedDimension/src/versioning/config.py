@@ -22,6 +22,9 @@ OUTPUT_FILE_NAME = "output.ttl"
 # namespace for the URI construction
 BASE_URI = "https://register.ld.admin.ch/i14y/concept/"
 
+SKOLEM_IDENTITY_BASE_URI = "https://register.ld.admin.ch/i14y/concept/{concept_identifier}/.well-known/genid/{hash}"
+SKOLEM_VERSION_BASE_URI = "https://register.ld.admin.ch/i14y/concept/{concept_identifier}/.well-known/genid/{hash}/version/{version}"
+
 # Constants for API configuration
 # API_TOKEN = "" # not necessary for prod and public concepts
 BASE_API_URL = "https://api.i14y.admin.ch/api/public/v1/concepts/"

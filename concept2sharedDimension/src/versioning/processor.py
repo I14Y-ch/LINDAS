@@ -59,6 +59,7 @@ class VersionProcessor:
         for i, current_data in enumerate(version_data):
             previous_data = version_data[i - 1] if i > 0 else None
             next_data = version_data[i + 1] if i < len(version_data) - 1 else None
+            self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
 
             if i == len(version_data)-1:
                 self._process_latest_version(current_data)
