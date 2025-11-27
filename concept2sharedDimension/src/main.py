@@ -1,10 +1,10 @@
 import argparse
 import os
 from time import time
-from versioning import VersionProcessor, CatalogManager
-from versioning.config import *
+from .versioning import VersionProcessor, CatalogManager
+from .versioning.config import *
 import warnings
-from versioning.utils import I14YAPIHelper, timer  
+from .versioning.utils import I14YAPIHelper, timer  
 from urllib3.exceptions import InsecureRequestWarning
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 import tracemalloc
