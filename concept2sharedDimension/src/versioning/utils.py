@@ -36,8 +36,6 @@ def get_stardog_db_conn():
     session = r.Session()
     session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=3600, **kwargs)
 
-    endpoint = endpoint.rstrip("/")
-
     conn_details = {"endpoint": endpoint, "username": stardog_user, "password": stardog_password, "session": session}
 
     return database, conn_details

@@ -90,7 +90,7 @@ class VersionProcessor:
         }
         """
 
-        with stardog.Connection(database, conn_details) as conn:
+        with stardog.Connection(database, **conn_details) as conn:
             conn.update(
                 query=delete_query,
                 bindings={"identifier": concept_identifier}
