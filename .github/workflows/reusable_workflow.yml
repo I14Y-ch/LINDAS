@@ -12,8 +12,11 @@ on:
       LINDAS_QUERY_URL:
         required: true
         type: string
+      BASE_API_URL:
+        required: true
+        type: string
       BATCH_SIZE:
-        required: false
+        required: true
         type: string # strings in env; cast to int in code
         default: '10'
     
@@ -24,6 +27,11 @@ on:
 env:
   PYTHON_VERSION: '3.10'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
+  CLEAR_GRAPH: ${{ inputs.CLEAR_GRAPH }}
+  STARDOG_URL: ${{ inputs.STARDOG_URL }}
+  LINDAS_QUERY_URL: ${{ inputs.LINDAS_QUERY_URL }}
+  BASE_API_URL: ${{ inputs.BASE_API_URL }}
+  BATCH_SIZE: ${{ inputs.BATCH_SIZE }}
 
 jobs:
   get-concepts:
@@ -145,6 +153,8 @@ jobs:
         if: steps.calc-batch.outputs.batch_ids != ''
         env:
           BATCH_CONCEPT_IDS: ${{ steps.calc-batch.outputs.batch_ids }}
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
         shell: bash
         run: |
           echo "Processing batch ${{ matrix.batch_index }}"
