@@ -80,12 +80,13 @@ class VersionProcessor:
 
         delete_query = """
         DELETE WHERE {
-        GRAPH <https://lindas.admin.ch/fso/i14y> {
-            ?s ?p ?o .
-            FILTER(STRSTARTS(STR(?s), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier, "/")))
-            FILTER(!CONTAINS(STR(?s), "/version/"))
-            FILTER(STRSTARTS(STR(?o), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier, "/")))
-            FILTER(!CONTAINS(STR(?o), "/version/"))
+            GRAPH <https://lindas.admin.ch/fso/i14y> {
+                ?s ?p ?o .
+                FILTER(
+                    (STRSTARTS(STR(?s), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?s), "/version/"))
+                    ||
+                    (STRSTARTS(STR(?o), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?o), "/version/"))
+                )
             }
         }
         """
@@ -93,7 +94,7 @@ class VersionProcessor:
         with stardog.Connection(database, **conn_details) as conn:
             conn.update(
                 query=delete_query,
-                bindings={"identifier": concept_identifier}
+                bindings={"identifier": f'"{concept_identifier}"'}
             )
 
         lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
