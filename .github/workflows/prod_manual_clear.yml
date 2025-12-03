@@ -1,7 +1,8 @@
 name: Prod update with clear graph before
 
-on:
-  workflow_dispatch:
+# TODO Sergiy: decomment once the workflows are approved
+# on:
+#   workflow_dispatch:
 
 jobs:
   update-concepts:
