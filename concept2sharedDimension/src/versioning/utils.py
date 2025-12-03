@@ -52,20 +52,18 @@ class LindasAPIHelper:
         # We fetch from lindas if we don't already have lindas_concept_versions in memory
         if not LindasAPIHelper.lindas_concept_versions:
 
-            query = """
-                    PREFIX prov: <http://www.w3.org/ns/prov#>
+            query = f"""
+            PREFIX prov: <http://www.w3.org/ns/prov#>
 
-                    SELECT ?concept_uri
-                    WHERE {
-                        GRAPH <{graph}> {
-                            ?concept_uri prov:wasDerivedFrom ?source .
-                            FILTER(CONTAINS(STR(?source), "i14y.admin.ch"))
-                        }
-                    }
-                    ORDER BY ?concept_uri
-                    """.format(
-                graph=TARGET_GRAPH
-            )
+            SELECT ?concept_uri
+            WHERE {{
+                GRAPH <{TARGET_GRAPH}> {{
+                    ?concept_uri prov:wasDerivedFrom ?source .
+                    FILTER(CONTAINS(STR(?source), "i14y.admin.ch"))
+                }}
+            }}
+            ORDER BY ?concept_uri
+            """
 
             url = LINDAS_QUERY_URL
             headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}

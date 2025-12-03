@@ -78,20 +78,18 @@ class VersionProcessor:
 
         database, conn_details = get_stardog_db_conn()
 
-        delete_query = """
-        DELETE WHERE {
-            GRAPH <{graph}> {
+        delete_query = f"""
+        DELETE WHERE {{
+            GRAPH <{TARGET_GRAPH}> {{
                 ?s ?p ?o .
                 FILTER(
                     (STRSTARTS(STR(?s), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?s), "/version/"))
                     ||
                     (STRSTARTS(STR(?o), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?o), "/version/"))
                 )
-            }
-        }
-        """.format(
-            graph=TARGET_GRAPH
-        )
+            }}
+        }}
+        """
 
         with stardog.Connection(database, **conn_details) as conn:
             conn.update(
