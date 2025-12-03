@@ -18,7 +18,7 @@ def main():
 
     args = parser.parse_args()
 
-    # We get a first time all the concepts, then we can get individual concept data from memory
+    # We get a first time all the concepts, then we can get individual concept data from memory instead of individually fetching each one when needed
     I14YAPIHelper.get_all_concepts()
 
     batch_concept_ids = os.environ.get('BATCH_CONCEPT_IDS', '').strip()
@@ -32,7 +32,7 @@ def main():
         output_file = OUTPUT_FILE_NAME
 
     processor = VersionProcessor(BASE_URI,output_file=output_file)
-    catalog = CatalogManager(processor.vm).create_catalog_description()
+    CatalogManager(processor.vm).create_catalog_description()
 
     try:
         # Priority 1: Check for environment variable (used by GitHub Actions)

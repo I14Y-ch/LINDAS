@@ -1,4 +1,5 @@
 from time import time
+from urllib.parse import urlparse
 import requests as r
 from .config import *
 from rdflib import Literal
@@ -15,19 +16,110 @@ def timer(func):
 
     return wrap_func
 
+
+def get_stardog_db_conn():
+    stardog_url = os.environ["STARDOG_URL"]
+    stardog_user = os.environ["STARDOG_USER"]
+    stardog_password = os.environ["STARDOG_PASSWORD"]
+    stardog_url = os.environ["STARDOG_URL"]
+
+    # Extract database from URL
+    parsed = urlparse(stardog_url)
+    path_parts = parsed.path.strip("/").split("/")
+
+    if len(path_parts) > 0 and path_parts[-1]:
+        database = path_parts[-1]
+        endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
+    else:
+        database = os.environ.get("STARDOG_DATABASE")
+        endpoint = stardog_url
+
+    session = r.Session()
+    session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=3600, **kwargs)
+
+    conn_details = {"endpoint": endpoint, "username": stardog_user, "password": stardog_password, "session": session}
+
+    return database, conn_details
+
+
+class LindasAPIHelper:
+
+    # Key: concept identifier, value: set of versions
+    lindas_concept_versions = {}
+
+    @staticmethod
+    def get_lindas_concept_versions():
+
+        # We fetch from lindas if we don't already have lindas_concept_versions in memory
+        if not LindasAPIHelper.lindas_concept_versions:
+
+            query = """
+                    PREFIX prov: <http://www.w3.org/ns/prov#>
+
+                    SELECT ?concept_uri
+                    WHERE {
+                        GRAPH <https://lindas.admin.ch/fso/i14y> {
+                            ?concept_uri prov:wasDerivedFrom ?source .
+                            FILTER(CONTAINS(STR(?source), "i14y.admin.ch"))
+                        }
+                    }
+                    ORDER BY ?concept_uri
+                    """
+
+            url = LINDAS_QUERY_URL
+            headers = {"Accept": "application/sparql-results+json"}
+
+            try:
+                print("DEBUG: get_existing_concepts_lindas API call")
+                resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
+                resp.raise_for_status()
+                data = resp.json()
+                results = data.get("results", {}).get("bindings", [])
+
+                concept_versions = {}
+
+                for result in results:
+                    concept_uri = result["concept_uri"]["value"]
+                    # concept_uri is like https://register.ld.admin.ch/i14y/concept/AREA_NOAS/version/1.0.0
+                    identifier = concept_uri.split("/version/")[0].rstrip("/").split("/")[-1]
+
+                    if "/version/" in concept_uri:
+                        version = concept_uri.split("/version/")[-1]
+                        concept_versions.setdefault(identifier, set()).add(version)
+                    else:
+                        concept_versions.setdefault(identifier, set())
+
+                total_versions = sum(len(vs) for vs in concept_versions.values())
+                print(f"DEBUG: {len(concept_versions)} concepts with {total_versions} versions")
+
+                LindasAPIHelper.lindas_concept_versions = concept_versions
+
+            except r.exceptions.RequestException as e:
+                print("Error while querying SPARQL endpoint:", e)
+                LindasAPIHelper.lindas_concept_versions = {}
+
+        return LindasAPIHelper.lindas_concept_versions
+
+
 class I14YAPIHelper:
 
     # We call the API only once to get all the concepts, then we work on the data locally
     # local_concepts is a i14y id -> concept map
     local_id_concepts_map = {}
 
-    # Same idea, but here we have a concept identifier -> concept list map
+    # Same idea, but here we have a concept identifier -> concept list map, useful when a concept identifier has multiple versions
     local_identifier_concepts_map = {}
 
     @staticmethod
-    def get_all_concepts(registration_statuses=None):
+    def get_all_concepts(registration_statuses=None, pageSize=100, clear_graph=CLEAR_GRAPH):
         """Get all CodeList concepts with specified registration statuses"""
         if not I14YAPIHelper.local_id_concepts_map:
+
+            lindas_concept_identifier_versions_map = {}
+
+            if not clear_graph:
+                lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
+
             print("DEBUG: get_all_concepts API call")
 
             base_url = f"{BASE_API_URL}"
@@ -36,15 +128,11 @@ class I14YAPIHelper:
             failed_concepts = []
 
             if registration_statuses is None:
-                registration_statuses = ['Standard', 'Qualified', 'PreferredStandard']
+                registration_statuses = STATUSES
 
             page = 1
             while True:
-                params = {
-                    'publicationLevel': 'Public',
-                    'page': page,
-                    'pageSize': 100  
-                }
+                params = {"publicationLevel": "Public", "page": page, "pageSize": pageSize}
 
                 response = r.get(base_url, params=params, verify=False)
                 response.raise_for_status()
@@ -53,13 +141,30 @@ class I14YAPIHelper:
                 if not data:
                     break
 
-                filtered = [
-                    c for c in data 
-                    if (c.get('conceptType') == 'CodeList' 
-                        and c.get('registrationStatus') in registration_statuses
-                        and c.get('identifier')  != "2.16.756.5.30.1.127.3.10.13.1"
-                        and c.get('id') not in EXCLUDED_IDS)
-                ]
+                filtered = []
+                for c in data:
+                    if c.get("conceptType") != "CodeList":
+                        continue
+
+                    if c.get("registrationStatus") not in registration_statuses:
+                        continue
+
+                    if c.get("id") in EXCLUDED_IDS:
+                        continue
+
+                    identifier = c.get("identifier")
+                    version = c.get("version")
+
+                    lindas_versions = lindas_concept_identifier_versions_map.get(identifier, set())
+
+                    # Keep concept from I14Y if:
+                    # 1) not present on LINDAS, OR
+                    # 2) present on LINDAS but I14Y version is new
+                    is_new_identifier = identifier not in lindas_concept_identifier_versions_map.keys()
+                    is_new_version = version not in lindas_versions
+
+                    if is_new_identifier or is_new_version:
+                        filtered.append(c)
 
                 for i, concept in enumerate(filtered, printed_count + 1):
                     print(f"{i}. Identifier: {concept.get('identifier')}")
@@ -70,7 +175,7 @@ class I14YAPIHelper:
                 all_concepts.extend(filtered)
                 printed_count = len(all_concepts)  
 
-                if len(data) < 100:
+                if len(data) < pageSize:
                     break
 
                 page += 1
@@ -103,7 +208,9 @@ class I14YAPIHelper:
 
         concept_data = I14YAPIHelper.local_id_concepts_map[concept_id]
         # Get codelist entries (if it's a CodeList concept)
-        if concept_data.get('conceptType') == 'CodeList' and 'codeListEntries' not in concept_data.keys():
+        if concept_data.get("conceptType") == "CodeList" and (
+            "codeListEntries" not in concept_data.keys() or not concept_data.get("codeListEntries", [])
+        ):
             print(f"DEBUG: get_concept_data /codelist-entries/exports/Json API call for concept_id: {concept_id}")
             entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/Json"
             entries_response = r.get(entries_url, verify=False)
@@ -121,17 +228,38 @@ class I14YAPIHelper:
             print(f"DEBUG: get_version_list get API call for concept_identifier: {concept_identifier}")
             try:
                 url = f"{BASE_API_URL}"
-                params = {
-                    'conceptIdentifier': concept_identifier,
-                    'publicationLevel': 'Public',
-                    'pageSize': 100
-                }
+                page = 1
+                page_size = 100
+                all_concepts = []
 
-                response = r.get(url, params=params, verify=False)
-                response.raise_for_status()
+                while True:
+                    params = {
+                        'conceptIdentifier': concept_identifier,
+                        'publicationLevel': 'Public',
+                        'page': page,
+                        'pageSize': page_size
+                    }
 
-                concepts = response.json().get('data', [])
-                I14YAPIHelper.local_identifier_concepts_map[concept_identifier] = concepts
+                    response = r.get(url, params=params, verify=False)
+                    response.raise_for_status()
+
+                    data = response.json().get('data', [])
+
+                    # Stop when no more items
+                    if not data:
+                        break
+
+                    all_concepts.extend(data)
+
+                    # If API returns fewer items than page_size, we are done
+                    if len(data) < page_size:
+                        break
+
+                    page += 1
+
+                # Store all results for this identifier
+                I14YAPIHelper.local_identifier_concepts_map[concept_identifier] = all_concepts
+
             except Exception as e:
                 print(f"Error fetching versions for {concept_identifier}: {str(e)}")
                 raise

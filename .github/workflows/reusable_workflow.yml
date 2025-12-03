@@ -1,16 +1,28 @@
-name: Weekly Concept2Lindas Update (PROD)
+name: Concept2Lindas Update
 
 on:
-  # TODO: decomment once workflow works well
-  # schedule:
-  #   - cron: '0 0 * * 1,5'  # 00:00 every Monday and Friday
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      CLEAR_GRAPH:
+        required: true
+        type: boolean
+      STARDOG_URL:
+        required: true
+        type: string
+      STARDOG_PASSWORD:
+        required: true
+        type: secret
+      LINDAS_QUERY_URL:
+        required: true
+        type: string
+      BATCH_SIZE:
+        required: false
+        type: string # strings in env; cast to int in code
+        default: '10'
 
 env:
   PYTHON_VERSION: '3.10'
-  STARDOG_URL: 'https://stardog.cluster.ldbar.ch/lindas'
   TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
-  BATCH_SIZE: '10'  # strings in env; cast to int in code
 
 jobs:
   get-concepts:
@@ -36,13 +48,11 @@ jobs:
           sudo apt-get install -y raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Get OUTPUT_FILE_NAME from Python config
         id: get-output-filename
         run: |
           OUTPUT_FILE=$(python -c "from concept2sharedDimension.src.versioning.config import OUTPUT_FILE_NAME; print(OUTPUT_FILE_NAME)")
           echo "filename=$OUTPUT_FILE" >> $GITHUB_OUTPUT
-
       - name: Get all concept IDs + build matrix
         id: get-concepts
         shell: bash
@@ -51,7 +61,6 @@ jobs:
           import json, os
           from concept2sharedDimension.src.versioning.utils import I14YAPIHelper
           from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
-
           if USE_STATUSES:
               print("Using status-based filtering")
               concepts = I14YAPIHelper.get_all_concepts(STATUSES)
@@ -62,20 +71,17 @@ jobs:
               ids = CONCEPT_IDS
               print(f"Total hardcoded concept IDs: {len(ids)}")
               print(f"Concept IDs: {ids[:3]}{'...' if len(ids) > 3 else ''}")
-
           batch_size = int(os.environ.get('BATCH_SIZE','30'))
           n_batches = (len(ids) + batch_size - 1) // batch_size
           print(f"Will create {n_batches} batches of size {batch_size}")
           
           # Run at least one empty batch so downstream jobs execute cleanly.
           matrix = {"include": [{"batch_index": i} for i in range(max(1, n_batches))]}
-
           with open(os.environ['GITHUB_OUTPUT'], 'a') as gh:
             print(f"concept_ids={','.join(ids)}", file=gh)
             print(f"total_concepts={len(ids)}", file=gh)
             print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
-
   process-batches:
     needs: get-concepts
     runs-on: ubuntu-latest
@@ -98,7 +104,6 @@ jobs:
           sudo apt-get install -y raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Calculate batch range
         id: calc-batch
         shell: bash
@@ -106,25 +111,19 @@ jobs:
           CONCEPT_IDS='${{ needs.get-concepts.outputs.concept_ids }}'
           BATCH_SIZE=${{ env.BATCH_SIZE }}
           BATCH_INDEX=${{ matrix.batch_index }}
-
           # Convert comma-separated string to array
           IFS=',' read -ra ID_ARRAY <<< "$CONCEPT_IDS"
           TOTAL_IDS=${#ID_ARRAY[@]}
-
           echo "Total concept IDs: $TOTAL_IDS"
           echo "Batch size: $BATCH_SIZE" 
           echo "Batch index: $BATCH_INDEX"
-
           START=$((BATCH_INDEX * BATCH_SIZE))
           END=$((START + BATCH_SIZE))
-
           echo "Calculated range: $START to $END"
-
           # Handle case where END exceeds array size
           if [ $END -gt $TOTAL_IDS ]; then
             END=$TOTAL_IDS
           fi
-
           BATCH_IDS=""
           for ((i=START; i<END && i<TOTAL_IDS; i++)); do
             if [ -n "$BATCH_IDS" ]; then
@@ -133,17 +132,14 @@ jobs:
               BATCH_IDS="${ID_ARRAY[i]}"
             fi
           done
-
           echo "Batch IDs for batch $BATCH_INDEX: $BATCH_IDS"
           echo "Processing concepts from index $START to $((END-1))"
-
           {
             echo "batch_ids=$BATCH_IDS"
             echo "batch_start=$START"
             echo "batch_end=$END"
             echo "actual_batch_size=$(echo "$BATCH_IDS" | tr ',' '\n' | wc -l)"
           } >> "$GITHUB_OUTPUT"
-
       - name: Process batch ${{ matrix.batch_index }} (${{ steps.calc-batch.outputs.batch_start }}-${{ steps.calc-batch.outputs.batch_end }})
         if: steps.calc-batch.outputs.batch_ids != ''
         env:
@@ -156,7 +152,6 @@ jobs:
           
           # Run the main script with the environment variable set
           python -m concept2sharedDimension.src.main --batch-index ${{ matrix.batch_index }}
-
       - name: Validate RDF
         if: steps.calc-batch.outputs.batch_ids != ''
         env:
@@ -164,7 +159,6 @@ jobs:
         run: |
           echo "Validating RDF file: $OUTPUT_FILE"
           rapper -i turtle -c "$OUTPUT_FILE"
-
       - name: Archive batch results
         uses: actions/upload-artifact@v4
         if: always()
@@ -192,7 +186,6 @@ jobs:
           sudo apt-get install -y raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Download all batch artifacts
         uses: actions/download-artifact@v4
         with:
@@ -202,28 +195,24 @@ jobs:
 
       - name: List and validate batch files
         run: |
-
           echo "Downloaded batch files:"
           find batches -name "*.ttl" -type f | sort
-
           echo "File sizes:"
           find batches -name "*.ttl" -type f -exec ls -lh {} \;
-
           echo "Validating all batch files:"
           for file in batches/*.ttl; do
             if [ -f "$file" ]; then
               echo "-------------------------------------"
               echo "Validating $file"
-
               # Validation
               rapper -i turtle -c "$file"
-
             fi
           done
       - name: Clear Stardog Graph
+        if: env.CLEAR_GRAPH == 'true'
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
-          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
         run: |
           python3 << 'EOF'
           import os
@@ -254,7 +243,7 @@ jobs:
                   endpoint = stardog_url
 
               session = requests.Session()
-              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
+              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=900, **kwargs)
 
               conn_details = {
                   'endpoint': endpoint,
@@ -278,11 +267,10 @@ jobs:
               print(f'Error clearing graph: {e}')
               print('Warning: Clear operation failed, but continuing with upload')
           EOF
-
       - name: Upload all batches to Stardog
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
-          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
           STARDOG_URL: ${{ env.STARDOG_URL }}
           TARGET_GRAPH: ${{ env.TARGET_GRAPH }}
         run: |

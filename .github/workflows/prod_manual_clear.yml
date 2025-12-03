@@ -1,0 +1,14 @@
+name: Prod update with clear graph before
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-concepts:
+    uses: ./.github/workflows/reusable_workflow.yml
+    with:
+      CLEAR_GRAPH: 'true'
+      STARDOG_URL: 'https://stardog.cluster.ldbar.ch/lindas'
+      STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
+      LINDAS_QUERY_URL: 'https://lindas.admin.ch/query'
+      BATCH_SIZE: '10'

@@ -327,6 +327,7 @@ class CodeListManager:
 
     def _create_all_level(self, ontology_uri, concept_data, is_version):
         """Create the top-level 'All' classification level"""
+        self.vm.set_is_version(is_version)
         if is_version:
             all_uri = self.vm.create_uri(concept_data['identifier'], "all", concept_data['version'])
         else:
@@ -365,6 +366,7 @@ class CodeListManager:
 
     def _process_entry(self, entry, concept_data, ontology_uri, all_uri, is_version):
         """Process entry with version-identity handling and level management"""
+        self.vm.set_is_version(is_version)
         if is_version:
             entry_uri = self.vm.create_uri(concept_data['identifier'], entry['code'], concept_data['version'])
 
@@ -578,11 +580,11 @@ class ConceptMetadataManager:
         """Add metadata to identity and version objects."""
 
         # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
-        self.vm.set_is_version(is_version)
+        self.vm.set_is_version(is_version if is_version else False)
 
         # self.vm.graph.add((uri, RDF.type, SKOS.ConceptScheme))
         self.vm.graph.add((uri, RDF.type, SDO.DefinedTermSet))
-        # self.vm.graph.add((uri, RDF.type, meta.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
+        self.vm.graph.add((uri, RDF.type, CUBELINK.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
         self.vm.graph.add((uri, RDF.type, vl.Version if is_version else vl.Identity))
 
         self.vm.graph.add((uri, PAV.version, Literal(concept_data['version'])))
