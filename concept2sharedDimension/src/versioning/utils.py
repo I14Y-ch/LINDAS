@@ -57,13 +57,15 @@ class LindasAPIHelper:
 
                     SELECT ?concept_uri
                     WHERE {
-                        GRAPH <https://lindas.admin.ch/fso/i14y> {
+                        GRAPH <{graph}> {
                             ?concept_uri prov:wasDerivedFrom ?source .
                             FILTER(CONTAINS(STR(?source), "i14y.admin.ch"))
                         }
                     }
                     ORDER BY ?concept_uri
-                    """
+                    """.format(
+                graph=TARGET_GRAPH
+            )
 
             url = LINDAS_QUERY_URL
             headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}

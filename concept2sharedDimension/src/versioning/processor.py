@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 import requests
 from .core import ConceptMetadataManager, CodeListManager, GraphManager
 from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, get_stardog_db_conn, timer
-from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, vl
+from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, TARGET_GRAPH, vl
 import stardog
 
 class VersionProcessor:
@@ -80,7 +80,7 @@ class VersionProcessor:
 
         delete_query = """
         DELETE WHERE {
-            GRAPH <https://lindas.admin.ch/fso/i14y> {
+            GRAPH <{graph}> {
                 ?s ?p ?o .
                 FILTER(
                     (STRSTARTS(STR(?s), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?s), "/version/"))
@@ -89,7 +89,9 @@ class VersionProcessor:
                 )
             }
         }
-        """
+        """.format(
+            graph=TARGET_GRAPH
+        )
 
         with stardog.Connection(database, **conn_details) as conn:
             conn.update(
