@@ -259,7 +259,7 @@ class CatalogManager:
         void_uri = URIRef("https://ld.admin.ch/.well-known/void")
 
         self.vm.graph.add((catalog_uri, RDF.type, SDO.DataCatalog))
-        self.vm.graph.add((catalog_uri, RDF.type, VOID.DatasetDescription))
+        # self.vm.graph.add((catalog_uri, RDF.type, VOID.DatasetDescription))
         self.vm.graph.add((catalog_uri, RDFA.uri, URIRef("https://register.ld.admin.ch/i14y/")))
         #self.vm.graph.add((catalog_uri, SDO.includedInDataCatalog, void_uri)) not used in LINDAS at the moment
 

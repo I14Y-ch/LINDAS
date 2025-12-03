@@ -31,7 +31,7 @@ class VersionProcessor:
             concept_ids_already_on_lindas = [
                 c_id
                 for c_id in concept_ids
-                if I14YAPIHelper.get_concept_data(c_id)["identifier"]
+                if I14YAPIHelper.get_concept_data(c_id)["data"]["identifier"]
                 in lindas_concept_identifier_versions_map.keys()
             ]
 
@@ -167,7 +167,6 @@ class VersionProcessor:
 
     def _process_latest_version(self, concept_data):
         """Process latest version"""
-        self.vm.set_is_version(False)
         identity_uri = self.vm.create_uri(concept_data['identifier'])
         version_uri = self.vm.create_uri(concept_data['identifier'], version=concept_data['version'])
 
@@ -202,7 +201,6 @@ class VersionProcessor:
 
     def _process_older_version(self, version_data, next_version_data=None):
         """Process older version with combined codelist and concept handling"""
-        self.vm.set_is_version(True)
         version_uri = self.vm.create_uri(version_data['identifier'], version=version_data['version'])
         identity_uri = self.vm.create_uri(version_data['identifier'])
         identity_all_uri = self.vm.create_uri(version_data['identifier'], "all")
