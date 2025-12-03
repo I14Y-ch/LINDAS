@@ -23,6 +23,8 @@ on:
     secrets:
       STARDOG_PASSWORD:
         required: true
+      STARDOG_USER:
+        required: true
 
 env:
   PYTHON_VERSION: '3.10'

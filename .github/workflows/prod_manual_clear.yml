@@ -14,3 +14,4 @@ jobs:
       BATCH_SIZE: '10'
     secrets:
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
+      STARDOG_USER: ${{ secrets.STARDOG_USER }}
