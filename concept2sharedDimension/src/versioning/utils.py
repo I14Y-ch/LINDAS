@@ -21,7 +21,6 @@ def get_stardog_db_conn():
     stardog_url = os.environ["STARDOG_URL"]
     stardog_user = os.environ["STARDOG_USER"]
     stardog_password = os.environ["STARDOG_PASSWORD"]
-    stardog_url = os.environ["STARDOG_URL"]
 
     # Extract database from URL
     parsed = urlparse(stardog_url)
@@ -36,6 +35,8 @@ def get_stardog_db_conn():
 
     session = r.Session()
     session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=3600, **kwargs)
+
+    endpoint = endpoint.rstrip("/")
 
     conn_details = {"endpoint": endpoint, "username": stardog_user, "password": stardog_password, "session": session}
 
