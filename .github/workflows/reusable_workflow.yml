@@ -1,4 +1,4 @@
-name: Concept2Lindas Update
+name: Concept2Lindas Update (reusable workflow)
 
 on:
   workflow_call:

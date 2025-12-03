@@ -1,4 +1,4 @@
-name: Prod update with clear graph before
+name: "[PROD] update with clear graph before"
 
 # TODO Sergiy: decomment once the workflows are approved
 # on:

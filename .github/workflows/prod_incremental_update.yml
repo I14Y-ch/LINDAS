@@ -1,4 +1,4 @@
-name: Prod Incremental Update
+name: "[PROD] Incremental Update"
 
 # TODO Sergiy: decomment once the workflows are approved
 # on:

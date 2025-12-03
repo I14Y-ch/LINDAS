@@ -1,4 +1,4 @@
-name: Test update with clear graph before
+name: "[TEST] update with clear graph before"
 
 on:
   workflow_dispatch:
