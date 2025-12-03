@@ -254,7 +254,7 @@ jobs:
               endpoint = stardog_url
 
           session = requests.Session()
-          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=900, **kwargs)
+          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
 
           conn_details = {
               'endpoint': endpoint,
@@ -264,9 +264,14 @@ jobs:
           }
 
           with stardog.Connection(database, **conn_details) as conn:
-              # Drop the entire graph
-              conn.update(f"DROP GRAPH <{target_graph}>")
-              print(f"Graph {target_graph} dropped successfully")
+              conn.begin()
+              try:
+                  conn.update(f"DROP GRAPH <{target_graph}>")
+                  conn.commit()
+                  print(f"Graph {target_graph} dropped successfully")
+              except Exception as e:
+                  conn.rollback()
+                  raise RuntimeError(f"Failed to drop graph: {e}")
           EOF
       - name: Upload all batches to Stardog
         env:
