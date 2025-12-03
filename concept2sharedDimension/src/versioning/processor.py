@@ -83,9 +83,9 @@ class VersionProcessor:
             GRAPH <{TARGET_GRAPH}> {{
                 ?s ?p ?o .
                 FILTER(
-                    (STRSTARTS(STR(?s), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?s), "/version/"))
+                    (STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && !CONTAINS(STR(?s), "/version/"))
                     ||
-                    (STRSTARTS(STR(?o), CONCAT("https://register.ld.admin.ch/i14y/concept/", ?identifier)) && !CONTAINS(STR(?o), "/version/"))
+                    (STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && !CONTAINS(STR(?o), "/version/"))
                 )
             }}
         }}
@@ -93,8 +93,7 @@ class VersionProcessor:
 
         with stardog.Connection(database, **conn_details) as conn:
             conn.update(
-                query=delete_query,
-                bindings={"identifier": f'"{concept_identifier}"'}
+                query=delete_query
             )
 
         lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
