@@ -67,7 +67,7 @@ class LindasAPIHelper:
                     """
 
             url = LINDAS_QUERY_URL
-            headers = {"Accept": "application/sparql-results+json"}
+            headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
 
             try:
                 print("DEBUG: get_existing_concepts_lindas API call")
