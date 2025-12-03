@@ -9,9 +9,6 @@ on:
       STARDOG_URL:
         required: true
         type: string
-      STARDOG_PASSWORD:
-        required: true
-        type: secret
       LINDAS_QUERY_URL:
         required: true
         type: string
@@ -19,6 +16,10 @@ on:
         required: false
         type: string # strings in env; cast to int in code
         default: '10'
+    
+    secrets:
+      STARDOG_PASSWORD:
+        required: true
 
 env:
   PYTHON_VERSION: '3.10'

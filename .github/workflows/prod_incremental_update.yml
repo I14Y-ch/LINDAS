@@ -12,6 +12,7 @@ jobs:
     with:
       CLEAR_GRAPH: 'false'
       STARDOG_URL: 'https://stardog.cluster.ldbar.ch/lindas'
-      STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
       LINDAS_QUERY_URL: 'https://lindas.admin.ch/query'
       BATCH_SIZE: '10'
+    secrets:
+      STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
