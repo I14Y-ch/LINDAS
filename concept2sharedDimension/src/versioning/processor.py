@@ -170,7 +170,7 @@ class VersionProcessor:
         identity_uri = self.vm.create_uri(concept_data['identifier'])
         version_uri = self.vm.create_uri(concept_data['identifier'], version=concept_data['version'])
 
-        self.codelist = CodeListManager(self.vm)
+        # self.codelist = CodeListManager(self.vm)
 
         # First create the identity hierarchy (without level info)
         self.metadata.add_scheme_metadata(identity_uri, concept_data, is_version=False)

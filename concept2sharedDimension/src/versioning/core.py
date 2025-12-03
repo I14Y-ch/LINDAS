@@ -684,6 +684,8 @@ class ConceptMetadataManager:
 
     def add_concept_hierarchy(self, concept_uri, concept_data, is_version=False, level_depths=None, levels_dict=None, levels_info_all=None):
         """Add hierarchy structure for the concept including XKOS levels"""
+        # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
+        self.vm.set_is_version(is_version)
         if level_depths is None:
             level_depths = {}
         if levels_dict is None:
@@ -691,8 +693,6 @@ class ConceptMetadataManager:
         if levels_info_all is None:
             levels_info_all = []
 
-        # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
-        self.vm.set_is_version(is_version)
 
         # Create 'All' level
         if is_version:
@@ -726,6 +726,7 @@ class ConceptMetadataManager:
 
     def _add_xkos_level_information(self, concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data):
         """Add XKOS level information to the concept scheme"""
+        self.vm.set_is_version(is_version)
         max_level_depth = max(level_depths.values(), default=1)
         self.vm.graph.add((concept_uri, XKOS.numberOfLevels, Literal(max_level_depth, datatype=XSD.integer)))
 
@@ -733,7 +734,6 @@ class ConceptMetadataManager:
         previous_level_uri = all_uri
 
         # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
-        self.vm.set_is_version(is_version)
 
         # Link the concept scheme to all levels (only for the current type - version or identity)
         # self.vm.graph.add((concept_uri, XKOS.hasPart, all_uri))
