@@ -263,15 +263,27 @@ jobs:
               'session': session
           }
 
+          max_retries = 5
+          retry_delay = 30  # seconds
+
           with stardog.Connection(database, **conn_details) as conn:
-              conn.begin()
-              try:
-                  conn.update(f"DROP GRAPH <{target_graph}>")
-                  conn.commit()
-                  print(f"Graph {target_graph} dropped successfully")
-              except Exception as e:
-                  conn.rollback()
-                  raise RuntimeError(f"Failed to drop graph: {e}")
+
+              for attempt in range(1, max_retries + 1):
+                  try:
+                      conn.begin()
+                      conn.update(f"DROP GRAPH <{target_graph}>")
+                      conn.commit()
+                      print(f"Graph {target_graph} dropped successfully")
+                      break
+                  except stardog.StardogError as e:
+                      conn.rollback()
+                      if "QEWCE2" in str(e):
+                          print(f"Write conflict detected, retrying in {retry_delay}s (attempt {attempt}/{max_retries})")
+                          time.sleep(retry_delay)
+                      else:
+                          raise RuntimeError(f"Failed to drop graph: {e}")
+              else:
+                  raise RuntimeError("Failed to drop graph after multiple retries due to write conflicts")
           EOF
       - name: Upload all batches to Stardog
         env:
