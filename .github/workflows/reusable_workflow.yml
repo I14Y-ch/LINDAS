@@ -232,73 +232,41 @@ jobs:
           from urllib.parse import urlparse
           import stardog
           import requests
-          import time
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
           stardog_url = os.environ['STARDOG_URL']
           target_graph = os.environ['TARGET_GRAPH']
-          batch_size = 10000  # number of triples to delete per batch
 
-          try:
-              print(f'Clearing graph in batches: {target_graph}')
-              print(f'Using URL: {stardog_url}')
-              print(f'Using user: {stardog_user}')
+          print(f'Dropping graph: {target_graph}')
+          print(f'Using URL: {stardog_url}')
+          print(f'Using user: {stardog_user}')
 
-              # Extract database from URL
-              parsed = urlparse(stardog_url)
-              path_parts = parsed.path.strip("/").split("/")
+          # Extract database from URL
+          parsed = urlparse(stardog_url)
+          path_parts = parsed.path.strip("/").split("/")
 
-              if len(path_parts) > 0 and path_parts[-1]:
-                  database = path_parts[-1]
-                  endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
-              else:
-                  database = os.environ.get("STARDOG_DATABASE")
-                  endpoint = stardog_url
+          if len(path_parts) > 0 and path_parts[-1]:
+              database = path_parts[-1]
+              endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
+          else:
+              database = os.environ.get("STARDOG_DATABASE")
+              endpoint = stardog_url
 
-              session = requests.Session()
-              session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=900, **kwargs)
+          session = requests.Session()
+          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=900, **kwargs)
 
-              conn_details = {
-                  'endpoint': endpoint,
-                  'username': stardog_user,
-                  'password': stardog_password,
-                  'session': session
-              }
+          conn_details = {
+              'endpoint': endpoint,
+              'username': stardog_user,
+              'password': stardog_password,
+              'session': session
+          }
 
-              with stardog.Connection(database, **conn_details) as conn:
-                  while True:
-                      # Fetch a batch of triples
-                      result = conn.select(
-                          f"""
-                          SELECT ?s ?p ?o
-                          FROM <{target_graph}>
-                          WHERE {{ ?s ?p ?o }}
-                          LIMIT {batch_size}
-                          """
-                      )
-                      triples = result['results']['bindings']
-
-                      if not triples:
-                          print("Graph is empty. Batch deletion complete!")
-                          break
-
-                      # Build the DELETE DATA query
-                      delete_statements = "\n".join(
-                          f"<{t['s']['value']}> <{t['p']['value']}> <{t['o']['value']}> ." for t in triples
-                      )
-                      delete_query = f"DELETE DATA {{ GRAPH <{target_graph}> {{\n{delete_statements}\n}} }}"
-
-                      try:
-                          conn.update(delete_query)
-                          print(f"Deleted {len(triples)} triples")
-                      except Exception as e:
-                          print(f"Error deleting batch: {e}")
-                          time.sleep(10)
-
-          except Exception as e:
-              print(f'Error clearing graph: {e}')
-              print('Warning: Batch delete operation failed, but continuing with upload')
+          with stardog.Connection(database, **conn_details) as conn:
+              # Drop the entire graph
+              conn.update(f"DROP GRAPH <{target_graph}>")
+              print(f"Graph {target_graph} dropped successfully")
           EOF
       - name: Upload all batches to Stardog
         env:
