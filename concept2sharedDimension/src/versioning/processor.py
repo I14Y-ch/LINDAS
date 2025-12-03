@@ -36,23 +36,14 @@ class VersionProcessor:
             ]
 
             for concept_id in concept_ids_already_on_lindas:
-                try:
-                    self.process_existing_concept(concept_id)
-                except Exception as e:
-                    print(f"Warning: Failed to process concept {concept_id}, continuing with others: {str(e)}")
-                    self.failed_concepts.append(concept_id)
-                    continue  # Continue with next concept
+                self.process_existing_concept(concept_id)
+
 
             # We keep only concept ids which are not at all on LINDAS and import them on LINDAS
             concept_ids = list(set(concept_ids) - set(concept_ids_already_on_lindas))
 
         for concept_id in concept_ids:
-            try:
-                self.process_new_concept(concept_id)
-            except Exception as e:
-                print(f"Warning: Failed to process concept {concept_id}, continuing with others: {str(e)}")
-                self.failed_concepts.append(concept_id)
-                continue  # Continue with next concept
+            self.process_new_concept(concept_id)
 
         # Print summary of failed concepts
         if self.failed_concepts:
