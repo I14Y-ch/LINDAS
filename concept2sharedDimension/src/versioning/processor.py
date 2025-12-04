@@ -73,11 +73,8 @@ class VersionProcessor:
         DELETE WHERE {{
             GRAPH <{TARGET_GRAPH}> {{
                 ?s ?p ?o .
-                FILTER(
-                    (STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && !CONTAINS(STR(?s), "/version/"))
-                    ||
-                    (STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && !CONTAINS(STR(?o), "/version/"))
-                )
+                FILTER((STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && !CONTAINS(STR(?s), "/version/")) || 
+                    (STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && !CONTAINS(STR(?o), "/version/")))
             }}
         }}
         """
