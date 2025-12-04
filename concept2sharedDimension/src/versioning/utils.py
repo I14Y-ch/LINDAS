@@ -2,7 +2,9 @@ from time import time
 from urllib.parse import urlparse
 import requests as r
 from .config import *
-from rdflib import Literal
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
 def timer(func):
     """Decorator that shows the execution time of the function object passed"""

@@ -1,5 +1,6 @@
 rdflib
 beautifulsoup4
 requests
+urllib3
 python-dateutil
 pystardog
