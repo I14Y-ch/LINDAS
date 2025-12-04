@@ -70,6 +70,7 @@ class VersionProcessor:
         database, conn_details = get_stardog_db_conn()
 
         delete_query = f"""
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 DELETE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
@@ -85,6 +86,10 @@ WHERE {{
             (STRSTARTS(STR(?o), "{BASE_URI}{concept_identifier}") && 
                 !CONTAINS(STR(?o), "/version/"))
         )
+
+        FILTER NOT EXISTS {{
+            ?s rdf:type <https://version.link/Deprecated> .
+        }}
     }}
 }}
 """
