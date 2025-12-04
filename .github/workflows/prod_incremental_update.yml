@@ -1,10 +1,10 @@
 name: "[PROD] Incremental Update"
 
 # TODO Sergiy: decomment once the workflows are approved
-# on:
+on:
   # schedule:
   #   - cron: '0 2 * * *'
-  # workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   update-concepts:
