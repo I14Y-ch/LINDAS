@@ -13,7 +13,7 @@ class VersionProcessor:
         self.metadata = ConceptMetadataManager(self.vm)
         self.codelist = CodeListManager(self.vm)
         # self.all_entry_codes = set()
-        self.version_data = []
+        # self.version_data = []
         self.failed_concepts = []  # Track failed concepts
 
     @timer
@@ -52,6 +52,7 @@ class VersionProcessor:
         return self.vm.graph
 
     def process_existing_concept(self, concept_id):
+        self.codelist = CodeListManager(self.vm)
         concept_meta = I14YAPIHelper.get_concept_data(concept_id)
 
         # Check if concept retrieval failed
@@ -121,6 +122,7 @@ WHERE {{
         return self.vm.graph
 
     def process_new_concept(self, concept_id):
+        self.codelist = CodeListManager(self.vm)
         concept_meta = I14YAPIHelper.get_concept_data(concept_id)
 
         # Check if concept retrieval failed
@@ -173,7 +175,8 @@ WHERE {{
         identity_uri = self.vm.create_uri(concept_data['identifier'])
         version_uri = self.vm.create_uri(concept_data['identifier'], version=concept_data['version'])
 
-        # self.codelist = CodeListManager(self.vm)
+        # It's useful to reset self.codelist
+        self.codelist = CodeListManager(self.vm)
 
         # First create the identity hierarchy (without level info)
         self.metadata.add_scheme_metadata(identity_uri, concept_data, is_version=False)

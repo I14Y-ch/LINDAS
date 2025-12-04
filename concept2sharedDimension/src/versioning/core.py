@@ -426,8 +426,8 @@ class CodeListManager:
 
         # self.vm.graph.add((entry_uri, XKOS.belongsTo, level_uri))
         self.vm.graph.add((entry_uri, XKOS.level, level_uri))
-        self.vm.graph.add((level_uri, XKOS.contains, entry_uri))
-        # self.vm.graph.add((level_uri, SKOS.member, entry_uri))
+        # self.vm.graph.add((level_uri, XKOS.contains, entry_uri))
+        self.vm.graph.add((level_uri, SKOS.member, entry_uri))
 
         self._add_entry_metadata(entry_uri, entry, ontology_uri, all_uri, is_version)
 
