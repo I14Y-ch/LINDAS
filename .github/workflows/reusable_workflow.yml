@@ -95,6 +95,7 @@ jobs:
           PY
   process-batches:
     needs: get-concepts
+    if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -182,6 +183,7 @@ jobs:
 
   clear-and-upload:
     needs: [get-concepts, process-batches]
+    if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
     runs-on: ubuntu-latest
     if: always()
     steps:
