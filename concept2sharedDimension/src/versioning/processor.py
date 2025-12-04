@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 import requests
 from .core import ConceptMetadataManager, CodeListManager, GraphManager
 from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, get_stardog_db_conn, timer
-from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, TARGET_GRAPH, vl
+from .config import BASE_URI, CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, TARGET_GRAPH, vl
 import stardog
 
 class VersionProcessor:
@@ -79,10 +79,10 @@ WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
         FILTER(
-            (STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && 
+            (STRSTARTS(STR(?s), "{BASE_URI}{concept_identifier}") && 
                 !CONTAINS(STR(?s), "/version/"))
             ||
-            (STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/concept/{concept_identifier}") && 
+            (STRSTARTS(STR(?o), "{BASE_URI}{concept_identifier}") && 
                 !CONTAINS(STR(?o), "/version/"))
         )
     }}
