@@ -185,7 +185,6 @@ jobs:
     needs: [get-concepts, process-batches]
     if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
     runs-on: ubuntu-latest
-    if: always()
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
