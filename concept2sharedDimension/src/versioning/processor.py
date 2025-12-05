@@ -211,6 +211,9 @@ WHERE {{
         identity_uri = self.vm.create_uri(version_data['identifier'])
         identity_all_uri = self.vm.create_uri(version_data['identifier'], "all")
 
+        # It's useful to reset self.codelist
+        self.codelist = CodeListManager(self.vm)
+
         # First create basic hierarchy without level info
         self.metadata.add_scheme_metadata(version_uri, version_data, is_version=True)
         version_all_uri = self.metadata.add_concept_hierarchy( version_uri,  version_data, is_version=True)
