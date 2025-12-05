@@ -80,16 +80,17 @@ DELETE {{
 WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
-        FILTER(
-            (STRSTARTS(STR(?s), "{BASE_URI}{concept_identifier}") && 
-                !CONTAINS(STR(?s), "/version/"))
-            ||
-            (STRSTARTS(STR(?o), "{BASE_URI}{concept_identifier}") && 
-                !CONTAINS(STR(?o), "/version/"))
+        FILTER (
+            (STRSTARTS(?s, "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?s), "/version/")) ||
+            (STRSTARTS(?o, "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?o), "/version/"))
         )
 
         FILTER NOT EXISTS {{
             ?s rdf:type <https://version.link/Deprecated> .
+        }}
+
+        FILTER NOT EXISTS {{
+            ?o rdf:type <https://version.link/Deprecated> .
         }}
     }}
 }}
