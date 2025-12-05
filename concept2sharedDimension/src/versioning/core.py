@@ -61,6 +61,9 @@ class StreamingTurtleWriter:
 
         # We mix in the current concept identifier with its version to avoid hash collisions between BNodes from different concepts
         parts = [self.current_concept_identifier, self.current_concept_version]
+        if not self.is_version:
+            # Useful to distinguish in some cases 2 BNodes
+            parts.append("identity")
         for (s, p, o) in triples:
             p_str = str(p)
 
