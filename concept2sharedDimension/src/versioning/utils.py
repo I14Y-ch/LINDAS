@@ -183,7 +183,6 @@ class I14YAPIHelper:
                 print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}")
 
             latest_concepts = {}
-
             for concept in all_concepts:
                 identifier = concept["identifier"]
                 valid_from = concept["validFrom"]
@@ -196,10 +195,6 @@ class I14YAPIHelper:
                 if concept["id"] == latest_concepts[concept_identifier]["id"]:
                     # local_id_concepts_map is used to store only the latest version of a concept, by id
                     I14YAPIHelper.local_id_concepts_map[concept["id"]] = concept
-                # local_identifier_concepts_map is used to store all versions of a concept, by identifier
-                if concept_identifier not in I14YAPIHelper.local_identifier_concepts_map.keys():
-                    I14YAPIHelper.local_identifier_concepts_map[concept_identifier] = []
-                I14YAPIHelper.local_identifier_concepts_map[concept_identifier].append(concept)
 
         return list(I14YAPIHelper.local_id_concepts_map.values())
 
@@ -275,7 +270,6 @@ class I14YAPIHelper:
                 raise
 
         concepts = I14YAPIHelper.local_identifier_concepts_map[concept_identifier]
-
         versions = []
         for concept in concepts:
             versions.append({

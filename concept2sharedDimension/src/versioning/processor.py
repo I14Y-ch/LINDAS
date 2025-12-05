@@ -26,7 +26,6 @@ class VersionProcessor:
         # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have a new version that is not on LINDAS
         if not clear_graph:
             lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
-
             # For concepts that are already on LINDAS but where there is a newer version on I14Y we have to process them separately
             concept_ids_already_on_lindas = [
                 c_id
@@ -34,7 +33,6 @@ class VersionProcessor:
                 if I14YAPIHelper.get_concept_data(c_id)["data"]["identifier"]
                 in lindas_concept_identifier_versions_map.keys()
             ]
-
             for concept_id in concept_ids_already_on_lindas:
                 self.process_existing_concept(concept_id)
 
