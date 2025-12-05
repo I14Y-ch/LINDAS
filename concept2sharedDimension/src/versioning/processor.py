@@ -90,6 +90,18 @@ WHERE {{
         FILTER NOT EXISTS {{
             ?o rdf:type <https://version.link/Deprecated> .
         }}
+
+        FILTER NOT EXISTS {{
+            ?deprecated ?p ?s .
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            FILTER CONTAINS(STR(?s), "/genid/")
+        }}
+
+        FILTER NOT EXISTS {{
+            ?deprecated ?p ?o .
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            FILTER CONTAINS(STR(?o), "/genid/")
+        }}
     }}
 }}
 """
