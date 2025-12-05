@@ -92,15 +92,17 @@ WHERE {{
         }}
 
         FILTER NOT EXISTS {{
-            ?deprecated ?p ?s .
             ?deprecated rdf:type <https://version.link/Deprecated> .
-            FILTER CONTAINS(STR(?s), "/genid/")
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?s) )
         }}
 
         FILTER NOT EXISTS {{
-            ?deprecated ?p ?o .
             ?deprecated rdf:type <https://version.link/Deprecated> .
-            FILTER CONTAINS(STR(?o), "/genid/")
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?o) )
         }}
     }}
 }}
