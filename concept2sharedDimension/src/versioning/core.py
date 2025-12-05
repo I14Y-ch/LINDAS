@@ -325,33 +325,33 @@ class CodeListManager:
         )
         return 1 + (self._calculate_depth(parent_entry, concept_data) if parent_entry else 0)
 
-    def _create_all_level(self, ontology_uri, concept_data, is_version):
-        """Create the top-level 'All' classification level"""
-        self.vm.set_is_version(is_version)
-        if is_version:
-            all_uri = self.vm.create_uri(concept_data['identifier'], "all", concept_data['version'])
-        else:
-            all_uri = self.vm.create_uri(concept_data['identifier'], "all")
+    # def _create_all_level(self, ontology_uri, concept_data, is_version):
+    #     """Create the top-level 'All' classification level"""
+    #     self.vm.set_is_version(is_version)
+    #     if is_version:
+    #         all_uri = self.vm.create_uri(concept_data['identifier'], "all", concept_data['version'])
+    #     else:
+    #         all_uri = self.vm.create_uri(concept_data['identifier'], "all")
 
-        self.vm.graph.add((all_uri, RDF.type, XKOS.ClassificationLevel))
-        self.vm.graph.add((all_uri, SDO.inDefinedTermSet, ontology_uri))
-        self.vm.graph.add((all_uri, SKOS.prefLabel, Literal("All", lang="en")))
+    #     self.vm.graph.add((all_uri, RDF.type, XKOS.ClassificationLevel))
+    #     self.vm.graph.add((all_uri, SDO.inDefinedTermSet, ontology_uri))
+    #     self.vm.graph.add((all_uri, SKOS.prefLabel, Literal("All", lang="en")))
 
-        hierarchy = BNode()
-        self.vm.graph.add((ontology_uri, CUBELINK.inHierarchy, hierarchy))
-        self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
+    #     hierarchy = BNode()
+    #     self.vm.graph.add((ontology_uri, CUBELINK.inHierarchy, hierarchy))
+    #     self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
 
-        hierarchy_name = (
-            f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}" 
-            if is_version else 
-            f"Identity Hierarchy - {concept_data['identifier']}"
-        )
+    #     hierarchy_name = (
+    #         f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}" 
+    #         if is_version else 
+    #         f"Identity Hierarchy - {concept_data['identifier']}"
+    #     )
 
-        # self.vm.graph.add((hierarchy, SKOS.prefLabel, Literal(hierarchy_name)))
-        self.vm.graph.add((hierarchy, SDO.name, Literal(hierarchy_name)))
-        self.vm.graph.add((hierarchy, CUBELINK.hierarchyRoot, all_uri))
+    #     # self.vm.graph.add((hierarchy, SKOS.prefLabel, Literal(hierarchy_name)))
+    #     self.vm.graph.add((hierarchy, SDO.name, Literal(hierarchy_name)))
+    #     self.vm.graph.add((hierarchy, CUBELINK.hierarchyRoot, all_uri))
 
-        return all_uri
+    #     return all_uri
 
     def _process_level_metadata(self, level_uri, level_title, level_depth, ontology_uri):
         """Add metadata for a classification level"""

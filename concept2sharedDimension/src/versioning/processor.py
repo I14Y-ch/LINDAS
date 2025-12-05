@@ -79,8 +79,8 @@ WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
         FILTER (
-            (STRSTARTS(?s, "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?s), "/version/")) ||
-            (STRSTARTS(?o, "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?o), "/version/"))
+            (STRSTARTS(STR(?s), "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?s), "/version/")) ||
+            (STRSTARTS(STR(?o), "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?o), "/version/"))
         )
 
         FILTER NOT EXISTS {{
