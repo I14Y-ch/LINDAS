@@ -19,9 +19,11 @@ class VersionProcessor:
     @timer
     def process_all_concepts(self, concept_ids=None, registration_statuses=None, clear_graph=CLEAR_GRAPH):
         """Process multiple concepts"""
-        concepts = I14YAPIHelper.get_all_concepts(registration_statuses)
         if concept_ids is None:
+            concepts = I14YAPIHelper.get_all_concepts(registration_statuses)
             concept_ids = [c['id'] for c in concepts]
+        else:
+            concepts = [I14YAPIHelper.get_concept_data(id) for id in concept_ids]
 
         # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have a new version that is not on LINDAS
         if not clear_graph:
@@ -38,10 +40,12 @@ class VersionProcessor:
                 nb_same_versions = 0
                 for version, codes in i14y_code_versions.items():
                     if codes != lindas_code_versions.get(version, {}):
+                        print(f"DEBUG: for concept {identifier} version {version} there is a difference between i14y and lindas codes")
                         concepts_to_update.append(concept_id)
                         self.process_existing_concept(concept_id, version)
                         break
                     else:
+                        print(f"DEBUG: for concept {identifier} version {version} there is no difference between i14y and lindas codes")
                         nb_same_versions += 1
                 if nb_same_versions == len(i14y_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
@@ -87,7 +91,9 @@ class VersionProcessor:
             # Which means that if next_data is already in LINDAS and up to date, we don't need to make succesor/predecessor links because they are already present
             # The last element of version_data is the new Identity graph
             if current_data['version'] != version_to_replace and next_data and next_data["version"] != version_to_replace:
+                print(f"DEBUG: continue in process_existing_concept for concept {current_data['identifier']} version {current_data['version']}")
                 continue
+            print(f"DEBUG: delete and reimport from here in process_existing_concept for concept {current_data['identifier']} version {current_data['version']}")
             LindasAPIHelper.delete_concept_version_graph(current_data["identifier"],current_data["version"])
             self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
 
