@@ -59,10 +59,8 @@ SELECT ?concept_uri
 WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?concept_uri prov:wasDerivedFrom ?source .
-        FILTER(CONTAINS(STR(?source), "i14y.admin.ch"))
     }}
-}}
-ORDER BY ?concept_uri"""
+}}"""
 
             url = LINDAS_QUERY_URL
             headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}

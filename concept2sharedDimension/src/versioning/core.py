@@ -460,12 +460,12 @@ class CodeListManager:
 
     def _add_entry_metadata(self, entry_uri, entry, ontology_uri, all_uri, is_version):
         """Add all metadata for a single entry"""
-        self.vm.graph.add((entry_uri, RDF.type, SKOS.Concept))
-        # self.vm.graph.add((entry_uri, RDF.type, SDO.DefinedTerm))
+        # self.vm.graph.add((entry_uri, RDF.type, SKOS.Concept))
+        self.vm.graph.add((entry_uri, RDF.type, SDO.DefinedTerm))
         self.vm.graph.add((entry_uri, RDF.type, vl.Version if is_version else vl.Identity))
 
-        self.vm.graph.add((entry_uri, SKOS.inScheme, ontology_uri))
-        # self.vm.graph.add((entry_uri, SDO.inDefinedTermSet, ontology_uri))
+        # self.vm.graph.add((entry_uri, SKOS.inScheme, ontology_uri))
+        self.vm.graph.add((entry_uri, SDO.inDefinedTermSet, ontology_uri))
         self.vm.graph.add((ontology_uri, SDO.hasDefinedTerm, entry_uri))
         self.vm.graph.add((all_uri, SKOS.member, entry_uri))
 
