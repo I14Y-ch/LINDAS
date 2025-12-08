@@ -19,15 +19,12 @@ class VersionProcessor:
     @timer
     def process_all_concepts(self, concept_ids=None, registration_statuses=None, clear_graph=CLEAR_GRAPH):
         """Process multiple concepts"""
+        concepts = I14YAPIHelper.get_all_concepts(registration_statuses)
         if concept_ids is None:
-            concepts = I14YAPIHelper.get_all_concepts(registration_statuses)
             concept_ids = [c['id'] for c in concepts]
 
         # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have a new version that is not on LINDAS
         if not clear_graph:
-
-            if concept_ids is None:
-                concepts = I14YAPIHelper.get_all_concepts(registration_statuses)
 
             concepts_to_update = []
             concepts_unchanged = []
