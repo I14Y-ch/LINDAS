@@ -23,7 +23,7 @@ class VersionProcessor:
             concepts = I14YAPIHelper.get_all_concepts(registration_statuses)
             concept_ids = [c['id'] for c in concepts]
         else:
-            concepts = [I14YAPIHelper.get_concept_data(id) for id in concept_ids]
+            concepts = [I14YAPIHelper.get_concept_data(id)['data'] for id in concept_ids]
 
         # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have a new version that is not on LINDAS
         if not clear_graph:
