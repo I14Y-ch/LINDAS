@@ -1,6 +1,7 @@
 from time import time
 from urllib.parse import urlparse
 import requests as r
+import stardog
 from .config import *
 import warnings
 from urllib3.exceptions import InsecureRequestWarning
@@ -19,38 +20,59 @@ def timer(func):
     return wrap_func
 
 
-def get_stardog_db_conn():
-    stardog_url = os.environ["STARDOG_URL"]
-    stardog_user = os.environ["STARDOG_USER"]
-    stardog_password = os.environ["STARDOG_PASSWORD"]
-
-    # Extract database from URL
-    parsed = urlparse(stardog_url)
-    path_parts = parsed.path.strip("/").split("/")
-
-    if len(path_parts) > 0 and path_parts[-1]:
-        database = path_parts[-1]
-        endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
-    else:
-        database = os.environ.get("STARDOG_DATABASE")
-        endpoint = stardog_url
-
-    session = r.Session()
-    session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=3600, **kwargs)
-
-    conn_details = {"endpoint": endpoint, "username": stardog_user, "password": stardog_password, "session": session}
-
-    return database, conn_details
-
-
 class LindasAPIHelper:
 
     # Key: concept identifier, value: set of versions
     lindas_concept_versions = {}
 
+    # Key: concept identifier, value:
+    #    dict with key: version and value: set of codes
+    lindas_code_versions = {}
+
+    @staticmethod
+    def get_stardog_db_conn():
+        stardog_url = os.environ["STARDOG_URL"]
+        stardog_user = os.environ["STARDOG_USER"]
+        stardog_password = os.environ["STARDOG_PASSWORD"]
+
+        # Extract database from URL
+        parsed = urlparse(stardog_url)
+        path_parts = parsed.path.strip("/").split("/")
+
+        if len(path_parts) > 0 and path_parts[-1]:
+            database = path_parts[-1]
+            endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
+        else:
+            database = os.environ.get("STARDOG_DATABASE")
+            endpoint = stardog_url
+
+        session = r.Session()
+        session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=3600, **kwargs)
+
+        conn_details = {
+            "endpoint": endpoint,
+            "username": stardog_user,
+            "password": stardog_password,
+            "session": session,
+        }
+
+        return database, conn_details
+
+    @staticmethod
+    def lindas_query(query):
+        url = LINDAS_QUERY_URL
+
+        headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
+
+        resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("results", {}).get("bindings", [])
+
+        return results
+
     @staticmethod
     def get_lindas_concept_versions():
-
         # We fetch from lindas if we don't already have lindas_concept_versions in memory
         if not LindasAPIHelper.lindas_concept_versions:
 
@@ -58,44 +80,129 @@ class LindasAPIHelper:
 SELECT ?concept_uri
 WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
-        ?concept_uri prov:wasDerivedFrom ?source .
+        ?concept_uri prov:wasDerivedFrom ?source
+        FILTER(CONTAINS(STR(?concept_uri), "/version/"))
     }}
 }}"""
+            print("DEBUG: get_existing_concepts_lindas API call")
 
-            url = LINDAS_QUERY_URL
-            headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
+            concept_versions = {}
 
-            try:
-                print("DEBUG: get_existing_concepts_lindas API call")
-                resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
-                resp.raise_for_status()
-                data = resp.json()
-                results = data.get("results", {}).get("bindings", [])
+            results = LindasAPIHelper.lindas_query(query)
 
-                concept_versions = {}
+            for result in results:
+                concept_uri = result["concept_uri"]["value"]
+                # concept_uri is like https://register.ld.admin.ch/i14y/concept/AREA_NOAS/version/1.0.0
+                identifier = concept_uri.split("/version/")[0].rstrip("/").split("/")[-1]
+                version = concept_uri.split("/version/")[-1]
+                concept_versions.setdefault(identifier, set()).add(version)
 
-                for result in results:
-                    concept_uri = result["concept_uri"]["value"]
-                    # concept_uri is like https://register.ld.admin.ch/i14y/concept/AREA_NOAS/version/1.0.0
-                    identifier = concept_uri.split("/version/")[0].rstrip("/").split("/")[-1]
+            total_versions = sum(len(vs) for vs in concept_versions.values())
+            print(f"DEBUG: {len(concept_versions)} concepts with {total_versions} versions")
 
-                    if "/version/" in concept_uri:
-                        version = concept_uri.split("/version/")[-1]
-                        concept_versions.setdefault(identifier, set()).add(version)
-                    else:
-                        concept_versions.setdefault(identifier, set())
-
-                total_versions = sum(len(vs) for vs in concept_versions.values())
-                print(f"DEBUG: {len(concept_versions)} concepts with {total_versions} versions")
-
-                LindasAPIHelper.lindas_concept_versions = concept_versions
-
-            except r.exceptions.RequestException as e:
-                print("Error while querying SPARQL endpoint:", e)
-                LindasAPIHelper.lindas_concept_versions = {}
+            LindasAPIHelper.lindas_concept_versions = concept_versions
 
         return LindasAPIHelper.lindas_concept_versions
 
+    @staticmethod
+    def get_lindas_code_versions(concept_identifier):
+        if concept_identifier not in LindasAPIHelper.lindas_code_versions.keys():
+            query = f"""
+PREFIX schema: <http://schema.org/>
+SELECT ?code_uri
+WHERE {{
+  GRAPH <{TARGET_GRAPH}> {{
+    ?code_uri a schema:DefinedTerm
+    FILTER (STRSTARTS(STR(?code_uri),"{BASE_URI}{concept_identifier}/"))
+    FILTER(CONTAINS(STR(?code_uri), "/version/"))
+  }}
+}}
+"""
+            version_codes_dict = {}
+            print("DEBUG: get_lindas_code_versions get API call for concept_identifier: " + concept_identifier)
+            results = LindasAPIHelper.lindas_query(query)
+            for result in results:
+                code_uri = result["code_uri"]["value"]
+                parts = code_uri.split(f"/{concept_identifier}/")[-1].split("/version/")
+                code, version = parts[0], parts[1]
+                if version not in version_codes_dict.keys():
+                    version_codes_dict[version] = set()
+
+                version_codes_dict[version].add(code)
+
+            LindasAPIHelper.lindas_code_versions[concept_identifier] = version_codes_dict
+
+        return LindasAPIHelper.lindas_code_versions[concept_identifier]
+
+    @staticmethod
+    def delete_concept_identity_graph(concept_identifier):
+        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
+
+        # We use regex for the case when concept_identifier = xxx and we have another concept xxxA, in this case we avoid to delete xxxA
+        delete_query = f"""
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+DELETE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+    }}
+}}
+WHERE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+        FILTER (
+            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") && !CONTAINS(STR(?s), "/version/")) ||
+            (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)") && !CONTAINS(STR(?o), "/version/"))
+        )
+
+        FILTER NOT EXISTS {{
+            ?s rdf:type <https://version.link/Deprecated> .
+        }}
+
+        FILTER NOT EXISTS {{
+            ?o rdf:type <https://version.link/Deprecated> .
+        }}
+
+        FILTER NOT EXISTS {{
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?s) )
+        }}
+
+        FILTER NOT EXISTS {{
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?o) )
+        }}
+    }}
+}}
+"""
+        with stardog.Connection(database, **conn_details) as conn:
+            conn.update(query=delete_query)
+
+    @staticmethod
+    def delete_concept_version_graph(concept_identifier, version):
+        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
+        # We use regex for the case when concept_identifier = xxx and we have another concept xxxA, in this case we avoid to delete xxxA
+        delete_query = f"""
+DELETE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+    }}
+}}
+WHERE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+        FILTER (
+            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") && STRENDS(STR(?s), "/version/{version}")) ||
+            (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)") && STRENDS(STR(?o), "/version/{version}"))
+        )
+    }}
+}}
+"""
+        with stardog.Connection(database, **conn_details) as conn:
+            conn.update(query=delete_query)
 
 class I14YAPIHelper:
 
@@ -223,6 +330,19 @@ class I14YAPIHelper:
 
         # Return in legacy format
         return {'data': I14YAPIHelper.local_id_concepts_map[concept_id]}
+
+    @staticmethod
+    def get_i14y_code_versions(concept_identifier):
+        version_codes_dict = {}
+        concept_version_list = I14YAPIHelper.get_version_list(concept_identifier)
+        for concept_version in concept_version_list:
+            version = concept_version["version"]
+            if version not in version_codes_dict.keys():
+                version_codes_dict[version] = set()
+            for codeListEntry in concept_version["codeListEntries"]:
+                code = codeListEntry["code"]
+                version_codes_dict[version].add(code)
+        return version_codes_dict
 
     @staticmethod
     def get_version_list(concept_identifier):

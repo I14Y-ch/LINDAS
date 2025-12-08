@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 import requests
 from .core import ConceptMetadataManager, CodeListManager, GraphManager
-from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, get_stardog_db_conn, timer
+from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, timer
 from .config import BASE_URI, CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, TARGET_GRAPH, vl
 import stardog
 
@@ -66,52 +66,7 @@ class VersionProcessor:
         if not version_data:
             raise ValueError("No version data found")
 
-        database, conn_details = get_stardog_db_conn()
-
-        delete_query = f"""
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-DELETE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-    }}
-}}
-WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-        FILTER (
-            (STRSTARTS(STR(?s), "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?s), "/version/")) ||
-            (STRSTARTS(STR(?o), "{BASE_URI}{concept_identifier}") && !CONTAINS(STR(?o), "/version/"))
-        )
-
-        FILTER NOT EXISTS {{
-            ?s rdf:type <https://version.link/Deprecated> .
-        }}
-
-        FILTER NOT EXISTS {{
-            ?o rdf:type <https://version.link/Deprecated> .
-        }}
-
-        FILTER NOT EXISTS {{
-            ?deprecated rdf:type <https://version.link/Deprecated> .
-            ?deprecated ?p2 ?genid .
-            FILTER ( CONTAINS(STR(?genid), "/genid/") )
-            FILTER ( STR(?genid) = STR(?s) )
-        }}
-
-        FILTER NOT EXISTS {{
-            ?deprecated rdf:type <https://version.link/Deprecated> .
-            ?deprecated ?p2 ?genid .
-            FILTER ( CONTAINS(STR(?genid), "/genid/") )
-            FILTER ( STR(?genid) = STR(?o) )
-        }}
-    }}
-}}
-"""
-
-        with stardog.Connection(database, **conn_details) as conn:
-            conn.update(
-                query=delete_query
-            )
+        LindasAPIHelper.delete_concept_identity_graph(concept_identifier)
 
         lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
 
