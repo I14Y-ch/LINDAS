@@ -61,7 +61,10 @@ class LindasAPIHelper:
     @staticmethod
     def lindas_query(query):
         url = LINDAS_QUERY_URL
-
+        # proxies = {
+        #     "http": "http://proxy-bvcol.admin.ch:8080",
+        #     "https": "http://proxy-bvcol.admin.ch:8080"
+        # }
         headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
 
         resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
@@ -95,6 +98,7 @@ WHERE {{
                 # concept_uri is like https://register.ld.admin.ch/i14y/concept/AREA_NOAS/version/1.0.0
                 identifier = concept_uri.split("/version/")[0].rstrip("/").split("/")[-1]
                 version = concept_uri.split("/version/")[-1]
+                # identifier=AREA_NOAS and version=1.0.0 in the example above
                 concept_versions.setdefault(identifier, set()).add(version)
 
             total_versions = sum(len(vs) for vs in concept_versions.values())
@@ -123,7 +127,9 @@ WHERE {{
             results = LindasAPIHelper.lindas_query(query)
             for result in results:
                 code_uri = result["code_uri"]["value"]
+                # code_uri is like https://register.ld.admin.ch/i14y/concept/LINDAS_testConcept/aaa/version/1.0.0
                 parts = code_uri.split(f"/{concept_identifier}/")[-1].split("/version/")
+                # code=aaa and version=1.0.0 with the example above
                 code, version = parts[0], parts[1]
                 if version not in version_codes_dict.keys():
                     version_codes_dict[version] = set()
@@ -214,14 +220,9 @@ class I14YAPIHelper:
     local_identifier_concepts_map = {}
 
     @staticmethod
-    def get_all_concepts(registration_statuses=None, pageSize=100, clear_graph=CLEAR_GRAPH):
+    def get_all_concepts(registration_statuses=None, pageSize=100):
         """Get all CodeList concepts with specified registration statuses"""
         if not I14YAPIHelper.local_id_concepts_map:
-
-            lindas_concept_identifier_versions_map = {}
-
-            if not clear_graph:
-                lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
 
             print("DEBUG: get_all_concepts API call")
 
@@ -258,16 +259,7 @@ class I14YAPIHelper:
                     identifier = c.get("identifier")
                     version = c.get("version")
 
-                    lindas_versions = lindas_concept_identifier_versions_map.get(identifier, set())
-
-                    # Keep concept from I14Y if:
-                    # 1) not present on LINDAS, OR
-                    # 2) present on LINDAS but I14Y version is new
-                    is_new_identifier = identifier not in lindas_concept_identifier_versions_map.keys()
-                    is_new_version = version not in lindas_versions
-
-                    if is_new_identifier or is_new_version:
-                        filtered.append(c)
+                    filtered.append(c)
 
                 for i, concept in enumerate(filtered, printed_count + 1):
                     print(f"{i}. Identifier: {concept.get('identifier')}")
@@ -287,6 +279,7 @@ class I14YAPIHelper:
             if failed_concepts:
                 print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}")
 
+            # We get only the latest concept version from i14y because we will get all the versions for each concept afterwards anyway
             latest_concepts = {}
             for concept in all_concepts:
                 identifier = concept["identifier"]

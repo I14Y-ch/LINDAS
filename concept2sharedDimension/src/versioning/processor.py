@@ -25,20 +25,29 @@ class VersionProcessor:
 
         # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have a new version that is not on LINDAS
         if not clear_graph:
-            lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
-            # For concepts that are already on LINDAS but where there is a newer version on I14Y we have to process them separately
-            concept_ids_already_on_lindas = [
-                c_id
-                for c_id in concept_ids
-                if I14YAPIHelper.get_concept_data(c_id)["data"]["identifier"]
-                in lindas_concept_identifier_versions_map.keys()
-            ]
-            for concept_id in concept_ids_already_on_lindas:
-                self.process_existing_concept(concept_id)
 
+            concepts_to_update = []
+            concepts_unchanged = []
+
+            for concept in concepts:
+                # version_data is already sorted in chronological order (from older to newer)
+                identifier = concept["identifier"]
+                concept_id = concept["id"]
+                i14y_code_versions = I14YAPIHelper.get_i14y_code_versions(identifier)
+                lindas_code_versions = LindasAPIHelper.get_lindas_code_versions(identifier)
+                nb_same_versions = 0
+                for version, codes in i14y_code_versions.items():
+                    if codes != lindas_code_versions.get(version, {}):
+                        concepts_to_update.append(concept_id)
+                        self.process_existing_concept(concept_id, version)
+                        break
+                    else:
+                        nb_same_versions += 1
+                if nb_same_versions == len(i14y_code_versions.keys()):
+                    concepts_unchanged.append(concept_id)
 
             # We keep only concept ids which are not at all on LINDAS and import them on LINDAS
-            concept_ids = list(set(concept_ids) - set(concept_ids_already_on_lindas))
+            concept_ids = list(set(concept_ids) - set(concepts_to_update) - set(concepts_unchanged))
 
         for concept_id in concept_ids:
             self.process_new_concept(concept_id)
@@ -49,7 +58,8 @@ class VersionProcessor:
 
         return self.vm.graph
 
-    def process_existing_concept(self, concept_id):
+    # Deletes identity graph and all versions
+    def process_existing_concept(self, concept_id, version_to_replace):
         self.codelist = CodeListManager(self.vm)
         concept_meta = I14YAPIHelper.get_concept_data(concept_id)
 
@@ -68,18 +78,17 @@ class VersionProcessor:
 
         LindasAPIHelper.delete_concept_identity_graph(concept_identifier)
 
-        lindas_concept_identifier_versions_map = LindasAPIHelper.get_lindas_concept_versions()
-
         # version_data is already sorted in chronological order (from older to newer)
         for i, current_data in enumerate(version_data):
             previous_data = version_data[i - 1] if i > 0 else None
             next_data = version_data[i + 1] if i < len(version_data) - 1 else None
-            # The idea is that we don't need to touch the links between all the old versions that are already on LINDAS
-            # We only need to make succesor/predecessor links between the latest version on LINDAS up until the newest from I14Y
-            # Which means that if next_data is already in LINDAS, we don't need to make succesor/predecessor links because they are already present
+            # The idea is that we don't need to touch the links between all the old versions that are already synchronized with LINDAS
+            # We only need to make succesor/predecessor links between the latest up to date version on LINDAS up until the newest from I14Y
+            # Which means that if next_data is already in LINDAS and up to date, we don't need to make succesor/predecessor links because they are already present
             # The last element of version_data is the new Identity graph
-            if next_data and next_data["version"] in lindas_concept_identifier_versions_map[next_data["identifier"]]:
+            if current_data['version'] != version_to_replace and next_data and next_data["version"] != version_to_replace:
                 continue
+            LindasAPIHelper.delete_concept_version_graph(current_data["identifier"],current_data["version"])
             self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
 
             if i == len(version_data) - 1:
