@@ -93,8 +93,10 @@ class VersionProcessor:
             if current_data['version'] != version_to_replace and next_data and next_data["version"] != version_to_replace:
                 print(f"DEBUG: continue in process_existing_concept for concept {current_data['identifier']} version {current_data['version']}")
                 continue
-            print(f"DEBUG: delete and reimport from here in process_existing_concept for concept {current_data['identifier']} version {current_data['version']}")
-            LindasAPIHelper.delete_concept_version_graph(current_data["identifier"],current_data["version"])
+            if current_data['version'] == version_to_replace:
+                print(f"DEBUG: delete in process_existing_concept on LINDAS concept {current_data['identifier']} version {current_data['version']}")
+                LindasAPIHelper.delete_concept_version_graph(current_data["identifier"],current_data["version"])
+            print(f"DEBUG: reimport in process_existing_concept concept {current_data['identifier']} version {current_data['version']}")
             self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
 
             if i == len(version_data) - 1:
