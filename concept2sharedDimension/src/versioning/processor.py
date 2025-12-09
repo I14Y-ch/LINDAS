@@ -57,13 +57,14 @@ class VersionProcessor:
                 if nb_same_versions == len(lindas_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
                 elif len(i14y_code_versions.keys()) < len(lindas_code_versions.keys()):
-                    print(f"DEBUG: for concept {identifier} there are less same versions than number of versions on LINDAS")
+                    print(f"DEBUG: for concept {identifier} there are less versions than number of versions on LINDAS")
                     concepts_to_update.append(concept_id)
                     already_replaced_lindas=False
                     versions_to_delete=set()
                     # In this case, we have less versions on I14Y than on LINDAS, we need to delete some versions
                     last_version_i14y = list(i14y_code_versions.keys())[0]
                     for i,lindas_version in enumerate(lindas_concept_versions[identifier]):
+                        print(f"DEBUG: check if concept {identifier} lindas version {lindas_version} is in i14y_code_versions.keys() {i14y_code_versions.keys()}")
                         if lindas_version not in i14y_code_versions.keys():
                             versions_to_delete.add(lindas_version)
                             if not already_replaced_lindas:
