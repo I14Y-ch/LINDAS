@@ -34,8 +34,8 @@ class StreamingTurtleWriter:
 
         # Skolemization
         self.enable_skolem = enable_skolem
-        self.skolem_base_identity = skolem_base_identity.rstrip("/") + "/"
-        self.skolem_base_version = skolem_base_version.rstrip("/") + "/"
+        self.skolem_base_identity = skolem_base_identity
+        self.skolem_base_version = skolem_base_version
         self.current_concept_identifier = "default"
         self.current_concept_version = "1.0.0"
         self.is_version = False
