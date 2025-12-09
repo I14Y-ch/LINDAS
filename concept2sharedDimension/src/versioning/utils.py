@@ -174,7 +174,8 @@ WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
         FILTER (
-            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") || (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)"))
+            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)")) ||
+            (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)"))
         )
     }}
 }}
