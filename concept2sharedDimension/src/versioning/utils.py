@@ -390,7 +390,8 @@ class I14YAPIHelper:
                 'registrationStatus': concept.get('registrationStatus')
             })
 
-        sorted_versions = sorted(versions, key=lambda x: x['validFrom'])
+        # We sort on validFrom date, if 2 elements have the same date we sort by version number
+        sorted_versions = sorted(versions, key=lambda x: (x['validFrom'], x['version']))
 
         version_data = []
         failed_concepts = []
