@@ -76,30 +76,50 @@ class LindasAPIHelper:
 
     @staticmethod
     def get_lindas_concept_versions():
-        # We fetch from lindas if we don't already have lindas_concept_versions in memory
+        # Only fetch from LINDAS if we don't already have concept versions cached
         if not LindasAPIHelper.lindas_concept_versions:
 
-            query = f"""PREFIX prov: <http://www.w3.org/ns/prov#>
-SELECT ?concept_uri
-WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?concept_uri prov:wasDerivedFrom ?source
-        FILTER(CONTAINS(STR(?concept_uri), "/version/"))
+            query = f"""
+    PREFIX prov: <http://www.w3.org/ns/prov#>
+    PREFIX schema: <http://schema.org/>
+
+    SELECT ?concept_uri ?validFrom
+    WHERE {{
+        GRAPH <{TARGET_GRAPH}> {{
+            ?concept_uri 
+                prov:wasDerivedFrom ?source ;
+                schema:validFrom ?validFrom .
+            FILTER(CONTAINS(STR(?concept_uri), "/version/"))
+        }}
     }}
-}}"""
+    """
             print("DEBUG: get_existing_concepts_lindas API call")
 
-            concept_versions = {}
+            rows = []
 
             results = LindasAPIHelper.lindas_query(query)
 
             for result in results:
                 concept_uri = result["concept_uri"]["value"]
-                # concept_uri is like https://register.ld.admin.ch/i14y/concept/AREA_NOAS/version/1.0.0
+                valid_from = result["validFrom"]["value"]
+
+                # Extract identifier and version from the URI
                 identifier = concept_uri.split("/version/")[0].rstrip("/").split("/")[-1]
                 version = concept_uri.split("/version/")[-1]
-                # identifier=AREA_NOAS and version=1.0.0 in the example above
-                concept_versions.setdefault(identifier, set()).add(version)
+
+                # Collect all rows before sorting
+                rows.append((identifier, version, valid_from))
+
+            # --- SORTING ---
+            # Sort first by validFrom (ISO date string ⇒ lexicographic sort is correct),
+            # then by version (string comparison works for semver-like versions).
+            rows.sort(key=lambda x: (x[2], x[1]))
+
+            # --- BUILD SORTED DICTIONARY ---
+            concept_versions = {}
+
+            for identifier, version, valid_from in rows:
+                concept_versions.setdefault(identifier, []).append(version)
 
             total_versions = sum(len(vs) for vs in concept_versions.values())
             print(f"DEBUG: {len(concept_versions)} concepts with {total_versions} versions")
@@ -139,9 +159,32 @@ WHERE {{
             LindasAPIHelper.lindas_code_versions[concept_identifier] = version_codes_dict
 
         return LindasAPIHelper.lindas_code_versions[concept_identifier]
+    
+    @staticmethod
+    def delete_concept(concept_identifier):
+        print(f"DEBUG: delete_concept concept {concept_identifier}")
+        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
+        delete_query = f"""
+DELETE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+    }}
+}}
+WHERE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+        FILTER (
+            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") || (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)"))
+        )
+    }}
+}}
+"""
+        with stardog.Connection(database, **conn_details) as conn:
+            conn.update(query=delete_query)
 
     @staticmethod
     def delete_concept_identity_graph(concept_identifier):
+        print(f"DEBUG: delete_concept_identity_graph concept {concept_identifier}")
         database, conn_details = LindasAPIHelper.get_stardog_db_conn()
 
         # We use regex for the case when concept_identifier = xxx and we have another concept xxxA, in this case we avoid to delete xxxA
@@ -189,6 +232,7 @@ WHERE {{
 
     @staticmethod
     def delete_concept_version_graph(concept_identifier, version):
+        print(f"DEBUG: delete_concept_version_graph concept {concept_identifier} version {version}")
         database, conn_details = LindasAPIHelper.get_stardog_db_conn()
         # We use regex for the case when concept_identifier = xxx and we have another concept xxxA, in this case we avoid to delete xxxA
         delete_query = f"""

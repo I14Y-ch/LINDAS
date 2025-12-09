@@ -25,14 +25,20 @@ class VersionProcessor:
         else:
             concepts = [I14YAPIHelper.get_concept_data(id)['data'] for id in concept_ids]
 
-        # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have a new version that is not on LINDAS
+        # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have changed since the last upload on LINDAS
         if not clear_graph:
+
+            lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
+
+            concepts_to_delete_identifiers = set(
+                [c["identifier"] for c in I14YAPIHelper.get_all_concepts(registration_statuses)]
+            ) - set(lindas_concept_versions.keys())
 
             concepts_to_update = []
             concepts_unchanged = []
 
             for concept in concepts:
-                # version_data is already sorted in chronological order (from older to newer)
+                # concepts is already sorted in chronological order (from older to newer)
                 identifier = concept["identifier"]
                 concept_id = concept["id"]
                 i14y_code_versions = I14YAPIHelper.get_i14y_code_versions(identifier)
@@ -47,8 +53,29 @@ class VersionProcessor:
                     else:
                         print(f"DEBUG: for concept {identifier} version {version} there is no difference between i14y and lindas codes")
                         nb_same_versions += 1
-                if nb_same_versions == len(i14y_code_versions.keys()):
+
+                if nb_same_versions == len(lindas_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
+                elif nb_same_versions < len(lindas_code_versions.keys()):
+                    concepts_to_update.append(concept_id)
+                    already_replaced_lindas=False
+                    versions_to_delete=set()
+                    # In this case, we have less versions on I14Y than on LINDAS, we need to delete some versions
+                    last_version_i14y = i14y_code_versions.keys()[0]
+                    for i,lindas_version in enumerate(lindas_concept_versions[identifier]):
+                        if lindas_version not in i14y_code_versions.keys():
+                            versions_to_delete.add(lindas_version)
+                            if not already_replaced_lindas:
+                                self.process_existing_concept(concept_id, last_version_i14y)
+                                already_replaced_lindas = True
+                        else:
+                            last_version_i14y = lindas_version
+
+                    for lindas_version in versions_to_delete:
+                        LindasAPIHelper.delete_concept_version_graph(identifier, lindas_version)
+
+            for concept_identifier in concepts_to_delete_identifiers:
+                LindasAPIHelper.delete_concept(concept_identifier)
 
             # We keep only concept ids which are not at all on LINDAS and import them on LINDAS
             concept_ids = list(set(concept_ids) - set(concepts_to_update) - set(concepts_unchanged))
