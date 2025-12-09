@@ -62,7 +62,7 @@ class VersionProcessor:
                     already_replaced_lindas=False
                     versions_to_delete=set()
                     # In this case, we have less versions on I14Y than on LINDAS, we need to delete some versions
-                    last_version_i14y = i14y_code_versions.keys()[0]
+                    last_version_i14y = list(i14y_code_versions.keys())[0]
                     for i,lindas_version in enumerate(lindas_concept_versions[identifier]):
                         if lindas_version not in i14y_code_versions.keys():
                             versions_to_delete.add(lindas_version)
