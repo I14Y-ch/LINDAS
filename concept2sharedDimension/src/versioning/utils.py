@@ -181,7 +181,7 @@ WHERE {{
     #         FILTER ( CONTAINS(STR(?genid), "/genid/") )
     #         FILTER ( STR(?genid) = STR(?o) )
     #     }}
-    # }}
+    }}
 }}
 """
         with stardog.Connection(database, **conn_details) as conn:
