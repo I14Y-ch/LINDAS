@@ -82,6 +82,8 @@ class VersionProcessor:
 
         LindasAPIHelper.delete_concept_identity_graph(concept_identifier)
 
+        i_begin_reimport = len(version_data)
+        i_begin_delete = len(version_data)
         # version_data is already sorted in chronological order (from older to newer)
         for i, current_data in enumerate(version_data):
             previous_data = version_data[i - 1] if i > 0 else None
@@ -90,11 +92,18 @@ class VersionProcessor:
             # We only need to make succesor/predecessor links between the latest up to date version on LINDAS up until the newest from I14Y
             # Which means that if next_data is already in LINDAS and up to date, we don't need to make succesor/predecessor links because they are already present
             # The last element of version_data is the new Identity graph
-            if current_data['version'] != version_to_replace and next_data and next_data["version"] != version_to_replace:
+            if (
+                current_data["version"] != version_to_replace
+                and next_data
+                and next_data["version"] != version_to_replace
+                and i < i_begin_reimport
+            ):
                 print(f"DEBUG: continue in process_existing_concept for concept {current_data['identifier']} version {current_data['version']}")
                 continue
-            if current_data['version'] == version_to_replace:
+            i_begin_reimport = i
+            if current_data["version"] == version_to_replace or i > i_begin_delete:
                 print(f"DEBUG: delete in process_existing_concept on LINDAS concept {current_data['identifier']} version {current_data['version']}")
+                i_begin_delete = i
                 LindasAPIHelper.delete_concept_version_graph(current_data["identifier"],current_data["version"])
             print(f"DEBUG: reimport in process_existing_concept concept {current_data['identifier']} version {current_data['version']}")
             self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
