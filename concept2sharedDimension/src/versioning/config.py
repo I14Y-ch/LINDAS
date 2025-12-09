@@ -22,6 +22,7 @@ CONCEPT_IDS = []#["08dd28d2-a693-5049-a3fe-0ee83005b61b"]
 # Output file name
 OUTPUT_FILE_NAME = "output.ttl"
 DEBUG_INCLUDE_CODE_VERSIONS = True
+DEBUG_LOCAL_TEST=False
 
 LINDAS_QUERY_URL = os.environ.get("LINDAS_QUERY_URL", "https://test.lindas.admin.ch/query")
 CLEAR_GRAPH = os.environ.get("CLEAR_GRAPH", "false") == "true"

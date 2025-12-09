@@ -31,9 +31,9 @@ class LindasAPIHelper:
 
     @staticmethod
     def get_stardog_db_conn():
-        stardog_url = os.environ["STARDOG_URL"]
-        stardog_user = os.environ["STARDOG_USER"]
-        stardog_password = os.environ["STARDOG_PASSWORD"]
+        stardog_url = os.environ.get("STARDOG_URL","")
+        stardog_user = os.environ.get("STARDOG_USER","")
+        stardog_password = os.environ.get("STARDOG_PASSWORD","")
 
         # Extract database from URL
         parsed = urlparse(stardog_url)
@@ -61,13 +61,16 @@ class LindasAPIHelper:
     @staticmethod
     def lindas_query(query):
         url = LINDAS_QUERY_URL
-        # proxies = {
-        #     "http": "http://proxy-bvcol.admin.ch:8080",
-        #     "https": "http://proxy-bvcol.admin.ch:8080"
-        # }
+        proxies = {
+            "http": "http://proxy-bvcol.admin.ch:8080",
+            "https": "http://proxy-bvcol.admin.ch:8080"
+        }
         headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
 
-        resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
+        if DEBUG_LOCAL_TEST:
+            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False,proxies=proxies)
+        else:
+            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
         resp.raise_for_status()
         data = resp.json()
         results = data.get("results", {}).get("bindings", [])
@@ -180,8 +183,9 @@ WHERE {{
     }}
 }}
 """
-        with stardog.Connection(database, **conn_details) as conn:
-            conn.update(query=delete_query)
+        if not DEBUG_LOCAL_TEST:
+            with stardog.Connection(database, **conn_details) as conn:
+                conn.update(query=delete_query)
 
     @staticmethod
     def delete_concept_identity_graph(concept_identifier):
@@ -228,8 +232,9 @@ WHERE {{
     }}
 }}
 """
-        with stardog.Connection(database, **conn_details) as conn:
-            conn.update(query=delete_query)
+        if not DEBUG_LOCAL_TEST:
+            with stardog.Connection(database, **conn_details) as conn:
+                conn.update(query=delete_query)
 
     @staticmethod
     def delete_concept_version_graph(concept_identifier, version):
@@ -274,8 +279,9 @@ WHERE {{
     }}
 }}
 """
-        with stardog.Connection(database, **conn_details) as conn:
-            conn.update(query=delete_query)
+        if not DEBUG_LOCAL_TEST:
+            with stardog.Connection(database, **conn_details) as conn:
+                conn.update(query=delete_query)
 
 class I14YAPIHelper:
 

@@ -64,11 +64,12 @@ class VersionProcessor:
                     # In this case, we have less versions on I14Y than on LINDAS, we need to delete some versions
                     last_version_i14y = list(i14y_code_versions.keys())[0]
                     for i,lindas_version in enumerate(lindas_concept_versions[identifier]):
-                        print(f"DEBUG: check if concept {identifier} lindas version {lindas_version} is in i14y_code_versions.keys() {i14y_code_versions.keys()}")
+                        print(f"DEBUG: check if concept {identifier} lindas version {lindas_version} is in i14y_code_versions.keys() {list(i14y_code_versions.keys())}")
                         if lindas_version not in i14y_code_versions.keys():
                             versions_to_delete.add(lindas_version)
                             if not already_replaced_lindas:
                                 print(f"DEBUG: for concept {identifier} there is version {lindas_version} on LINDAS but not on I14Y")
+                                print(f"DEBUG: last_version_i14y is {last_version_i14y}")
                                 self.process_existing_concept(concept_id, last_version_i14y)
                                 already_replaced_lindas = True
                         else:
