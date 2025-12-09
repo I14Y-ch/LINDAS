@@ -56,7 +56,7 @@ class VersionProcessor:
 
                 if nb_same_versions == len(lindas_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
-                elif nb_same_versions < len(lindas_code_versions.keys()):
+                elif len(i14y_code_versions.keys()) < len(lindas_code_versions.keys()):
                     print(f"DEBUG: for concept {identifier} there are less same versions than number of versions on LINDAS")
                     concepts_to_update.append(concept_id)
                     already_replaced_lindas=False
