@@ -30,9 +30,9 @@ class VersionProcessor:
 
             lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
 
-            concepts_to_delete_identifiers = set(
+            concepts_to_delete_identifiers = set(lindas_concept_versions.keys()) - set(
                 [c["identifier"] for c in I14YAPIHelper.get_all_concepts(registration_statuses)]
-            ) - set(lindas_concept_versions.keys())
+            )
 
             concepts_to_update = []
             concepts_unchanged = []
