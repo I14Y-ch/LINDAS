@@ -430,7 +430,8 @@ class CodeListManager:
         # self.vm.graph.add((entry_uri, XKOS.belongsTo, level_uri))
         self.vm.graph.add((entry_uri, XKOS.level, level_uri))
         # self.vm.graph.add((level_uri, XKOS.contains, entry_uri))
-        self.vm.graph.add((level_uri, SKOS.member, entry_uri))
+        self.vm.graph.add((level_uri, SDO.member, entry_uri))
+        # self.vm.graph.add((level_uri, SKOS.member, entry_uri))
 
         self._add_entry_metadata(entry_uri, entry, ontology_uri, all_uri, is_version)
 
@@ -439,8 +440,10 @@ class CodeListManager:
         else:
             # If no parent, link to the all_uri as top concept
             self.vm.graph.add((entry_uri, SKOS.topConceptOf, ontology_uri))
-            self.vm.graph.add((entry_uri, SKOS.broader, all_uri))
-            self.vm.graph.add((all_uri, SKOS.narrower, entry_uri))
+            # self.vm.graph.add((entry_uri, SKOS.broader, all_uri))
+            # self.vm.graph.add((all_uri, SKOS.narrower, entry_uri))
+            self.vm.graph.add((entry_uri, SDO.isPartOf, all_uri))
+            self.vm.graph.add((all_uri, SDO.hasPart, entry_uri))
 
         if 'codeListEntryValueMaxLength' in concept_data or 'codeListEntryValueType' in concept_data:
             constraint_bnode = BNode()
@@ -467,7 +470,8 @@ class CodeListManager:
         # self.vm.graph.add((entry_uri, SKOS.inScheme, ontology_uri))
         self.vm.graph.add((entry_uri, SDO.inDefinedTermSet, ontology_uri))
         self.vm.graph.add((ontology_uri, SDO.hasDefinedTerm, entry_uri))
-        self.vm.graph.add((all_uri, SKOS.member, entry_uri))
+        self.vm.graph.add((all_uri, SDO.member, entry_uri))
+        # self.vm.graph.add((all_uri, SKOS.member, entry_uri))
 
         for lang, name in entry['name'].items():
             if is_valid_value(name):
@@ -768,7 +772,8 @@ class ConceptMetadataManager:
                     else:
                         entry_uri = self.vm.create_uri(concept_data['identifier'], entry['code'])
 
-                    self.vm.graph.add((level_uri, SKOS.member, entry_uri))
+                    self.vm.graph.add((level_uri, SDO.member, entry_uri))
+                    # self.vm.graph.add((level_uri, SKOS.member, entry_uri))
 
                 if previous_level_uri and (is_version == ('version' in str(previous_level_uri))):
                     self.vm.graph.add((previous_level_uri, CUBELINK.nextInHierarchy, level_uri))
