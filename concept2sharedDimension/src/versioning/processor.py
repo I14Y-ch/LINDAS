@@ -238,6 +238,9 @@ class VersionProcessor:
                     entry_identity_uri = self.vm.create_uri(version_data['identifier'], code)
                     self.codelist.mark_as_deprecated(entry_identity_uri,valid_to=version_data.get('validTo'))
 
+                    # Also mark last version as deprecated
+                    self.codelist.mark_as_deprecated(entry_version_uri,valid_to=version_data.get('validTo'))
+
                     self.codelist.add_versioning_relationships(entry_version_uri, entry_identity_uri)
 
                     self.codelist._process_entry(entry,version_data,identity_uri,identity_all_uri,is_version=False)

@@ -160,27 +160,27 @@ WHERE {{
             (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)") && !CONTAINS(STR(?o), "/version/"))
         )
 
-    #     FILTER NOT EXISTS {{
-    #         ?s rdf:type <https://version.link/Deprecated> .
-    #     }}
+        FILTER NOT EXISTS {{
+            ?s rdf:type <https://version.link/Deprecated> .
+        }}
 
-    #     FILTER NOT EXISTS {{
-    #         ?o rdf:type <https://version.link/Deprecated> .
-    #     }}
+        FILTER NOT EXISTS {{
+            ?o rdf:type <https://version.link/Deprecated> .
+        }}
 
-    #     FILTER NOT EXISTS {{
-    #         ?deprecated rdf:type <https://version.link/Deprecated> .
-    #         ?deprecated ?p2 ?genid .
-    #         FILTER ( CONTAINS(STR(?genid), "/genid/") )
-    #         FILTER ( STR(?genid) = STR(?s) )
-    #     }}
+        FILTER NOT EXISTS {{
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?s) )
+        }}
 
-    #     FILTER NOT EXISTS {{
-    #         ?deprecated rdf:type <https://version.link/Deprecated> .
-    #         ?deprecated ?p2 ?genid .
-    #         FILTER ( CONTAINS(STR(?genid), "/genid/") )
-    #         FILTER ( STR(?genid) = STR(?o) )
-    #     }}
+        FILTER NOT EXISTS {{
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?o) )
+        }}
     }}
 }}
 """
@@ -204,6 +204,28 @@ WHERE {{
             (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") && STRENDS(STR(?s), "/version/{version}")) ||
             (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)") && STRENDS(STR(?o), "/version/{version}"))
         )
+
+        FILTER NOT EXISTS {{
+            ?s rdf:type <https://version.link/Deprecated> .
+        }}
+
+        FILTER NOT EXISTS {{
+            ?o rdf:type <https://version.link/Deprecated> .
+        }}
+
+        FILTER NOT EXISTS {{
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?s) )
+        }}
+
+        FILTER NOT EXISTS {{
+            ?deprecated rdf:type <https://version.link/Deprecated> .
+            ?deprecated ?p2 ?genid .
+            FILTER ( CONTAINS(STR(?genid), "/genid/") )
+            FILTER ( STR(?genid) = STR(?o) )
+        }}
     }}
 }}
 """

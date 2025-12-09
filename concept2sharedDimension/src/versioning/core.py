@@ -305,7 +305,7 @@ class CodeListManager:
         self.vm.graph.add((identity_uri, vl.Version, version_uri))
 
     def mark_as_deprecated(self, identity_uri, valid_to=None):
-        """Mark an identity as deprecated"""
+        """Mark an identity/version as deprecated"""
         self.vm.graph.add((identity_uri, RDF.type, vl.Deprecated))
         if valid_to:
             self.vm.graph.add((
