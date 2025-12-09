@@ -57,6 +57,7 @@ class VersionProcessor:
                 if nb_same_versions == len(lindas_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
                 elif nb_same_versions < len(lindas_code_versions.keys()):
+                    print(f"DEBUG: for concept {identifier} there are less same versions than number of versions on LINDAS")
                     concepts_to_update.append(concept_id)
                     already_replaced_lindas=False
                     versions_to_delete=set()
@@ -66,6 +67,7 @@ class VersionProcessor:
                         if lindas_version not in i14y_code_versions.keys():
                             versions_to_delete.add(lindas_version)
                             if not already_replaced_lindas:
+                                print(f"DEBUG: for concept {identifier} there is version {lindas_version} on LINDAS but not on I14Y")
                                 self.process_existing_concept(concept_id, last_version_i14y)
                                 already_replaced_lindas = True
                         else:
