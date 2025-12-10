@@ -28,6 +28,7 @@ class VersionProcessor:
         # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have changed since the last upload on LINDAS
         if not clear_graph:
 
+            # Versions are sorted in chronological order
             lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
 
             concepts_to_delete_identifiers = set(lindas_concept_versions.keys()) - set(
@@ -38,9 +39,9 @@ class VersionProcessor:
             concepts_unchanged = []
 
             for concept in concepts:
-                # concepts is already sorted in chronological order (from older to newer)
                 identifier = concept["identifier"]
                 concept_id = concept["id"]
+                # Versions are sorted in chronological order
                 i14y_code_versions = I14YAPIHelper.get_i14y_code_versions(identifier)
                 lindas_code_versions = LindasAPIHelper.get_lindas_code_versions(identifier)
                 nb_same_versions = 0
@@ -57,14 +58,14 @@ class VersionProcessor:
                 if nb_same_versions == len(lindas_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
                 elif len(i14y_code_versions.keys()) < len(lindas_code_versions.keys()):
-                    print(f"DEBUG: for concept {identifier} there are less versions than number of versions on LINDAS")
+                    print(f"DEBUG: for concept {identifier} there are less versions than on LINDAS")
                     concepts_to_update.append(concept_id)
                     already_replaced_lindas=False
                     versions_to_delete=set()
                     # In this case, we have less versions on I14Y than on LINDAS, we need to delete some versions
                     last_version_i14y = list(i14y_code_versions.keys())[0]
                     for i,lindas_version in enumerate(lindas_concept_versions[identifier]):
-                        print(f"DEBUG: check if concept {identifier} lindas version {lindas_version} is in i14y_code_versions.keys() {list(i14y_code_versions.keys())}")
+                        print(f"DEBUG: check if concept {identifier} lindas version {lindas_version} is in i14y_code_versions {list(i14y_code_versions.keys())}")
                         if lindas_version not in i14y_code_versions.keys():
                             versions_to_delete.add(lindas_version)
                             if not already_replaced_lindas:
