@@ -77,6 +77,9 @@ class VersionProcessor:
 
                     for lindas_version in versions_to_delete:
                         LindasAPIHelper.delete_concept_version_graph(identifier, lindas_version)
+                        # If the deleted version is the last one, the deprecated codes of the version before should not be deprecated anymore
+                        if lindas_version == lindas_concept_versions[identifier][-1]:
+                            LindasAPIHelper.clean_deprecated_codes(identifier, last_version_i14y)
 
             for concept_identifier in concepts_to_delete_identifiers:
                 LindasAPIHelper.delete_concept(concept_identifier)

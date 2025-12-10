@@ -283,6 +283,38 @@ WHERE {{
             with stardog.Connection(database, **conn_details) as conn:
                 conn.update(query=delete_query)
 
+    @staticmethod
+    def clean_deprecated_codes(concept_identifier, version):
+        # If we delete the last version from lindas, the codes from the version before it should no longer be deprecated
+        print(f"DEBUG: clean_deprecated_codes concept {concept_identifier} version {version}")
+        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
+
+        delete_query=f"""
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+DELETE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?identityUri rdf:type <https://version.link/Deprecated> .
+        ?versionUri rdf:type <https://version.link/Deprecated> .
+    }}
+}}
+WHERE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?identityUri <https://version.link/Version> ?versionUri .
+        ?versionUri <https://version.link/Identity> ?identityUri .
+
+        FILTER(STRSTARTS(STR(?identityUri), "{BASE_URI}{concept_identifier}/"))
+
+        FILTER(STRSTARTS(STR(?versionUri), "{BASE_URI}{concept_identifier}/"))
+        FILTER(STRENDS(STR(?versionUri), "/version/{version}"))
+    }}
+}}
+"""
+        if not DEBUG_LOCAL_TEST:
+            with stardog.Connection(database, **conn_details) as conn:
+                conn.update(query=delete_query)
+
+
 class I14YAPIHelper:
 
     # We call the API only once to get all the concepts, then we work on the data locally
