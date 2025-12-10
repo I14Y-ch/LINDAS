@@ -19,6 +19,15 @@ def timer(func):
 
     return wrap_func
 
+def delete_orphaned_concepts_lindas():
+    lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
+
+    concepts_to_delete_identifiers = set(lindas_concept_versions.keys()) - set(
+        [c["identifier"] for c in I14YAPIHelper.get_all_concepts()]
+    )
+
+    for concept_identifier in concepts_to_delete_identifiers:
+        LindasAPIHelper.delete_concept(concept_identifier)
 
 class LindasAPIHelper:
 
@@ -162,7 +171,7 @@ WHERE {{
             LindasAPIHelper.lindas_code_versions[concept_identifier] = version_codes_dict
 
         return LindasAPIHelper.lindas_code_versions[concept_identifier]
-    
+
     @staticmethod
     def delete_concept(concept_identifier):
         print(f"DEBUG: delete_concept concept {concept_identifier}")
@@ -186,134 +195,6 @@ WHERE {{
         if not DEBUG_LOCAL_TEST:
             with stardog.Connection(database, **conn_details) as conn:
                 conn.update(query=delete_query)
-
-    @staticmethod
-    def delete_concept_identity_graph(concept_identifier):
-        print(f"DEBUG: delete_concept_identity_graph concept {concept_identifier}")
-        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
-
-        # We use regex for the case when concept_identifier = xxx and we have another concept xxxA, in this case we avoid to delete xxxA
-        delete_query = f"""
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-DELETE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-    }}
-}}
-WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-        FILTER (
-            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") && !CONTAINS(STR(?s), "/version/")) ||
-            (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)") && !CONTAINS(STR(?o), "/version/"))
-        )
-
-        FILTER NOT EXISTS {{
-            ?s rdf:type <https://version.link/Deprecated> .
-        }}
-
-        FILTER NOT EXISTS {{
-            ?o rdf:type <https://version.link/Deprecated> .
-        }}
-
-        FILTER NOT EXISTS {{
-            ?deprecated rdf:type <https://version.link/Deprecated> .
-            ?deprecated ?p2 ?genid .
-            FILTER ( CONTAINS(STR(?genid), "/genid/") )
-            FILTER ( STR(?genid) = STR(?s) )
-        }}
-
-        FILTER NOT EXISTS {{
-            ?deprecated rdf:type <https://version.link/Deprecated> .
-            ?deprecated ?p2 ?genid .
-            FILTER ( CONTAINS(STR(?genid), "/genid/") )
-            FILTER ( STR(?genid) = STR(?o) )
-        }}
-    }}
-}}
-"""
-        if not DEBUG_LOCAL_TEST:
-            with stardog.Connection(database, **conn_details) as conn:
-                conn.update(query=delete_query)
-
-    @staticmethod
-    def delete_concept_version_graph(concept_identifier, version):
-        print(f"DEBUG: delete_concept_version_graph concept {concept_identifier} version {version}")
-        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
-        # We use regex for the case when concept_identifier = xxx and we have another concept xxxA, in this case we avoid to delete xxxA
-        delete_query = f"""
-DELETE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-    }}
-}}
-WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-        FILTER (
-            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)") && STRENDS(STR(?s), "/version/{version}")) ||
-            (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)") && STRENDS(STR(?o), "/version/{version}"))
-        )
-
-        FILTER NOT EXISTS {{
-            ?s rdf:type <https://version.link/Deprecated> .
-        }}
-
-        FILTER NOT EXISTS {{
-            ?o rdf:type <https://version.link/Deprecated> .
-        }}
-
-        FILTER NOT EXISTS {{
-            ?deprecated rdf:type <https://version.link/Deprecated> .
-            ?deprecated ?p2 ?genid .
-            FILTER ( CONTAINS(STR(?genid), "/genid/") )
-            FILTER ( STR(?genid) = STR(?s) )
-        }}
-
-        FILTER NOT EXISTS {{
-            ?deprecated rdf:type <https://version.link/Deprecated> .
-            ?deprecated ?p2 ?genid .
-            FILTER ( CONTAINS(STR(?genid), "/genid/") )
-            FILTER ( STR(?genid) = STR(?o) )
-        }}
-    }}
-}}
-"""
-        if not DEBUG_LOCAL_TEST:
-            with stardog.Connection(database, **conn_details) as conn:
-                conn.update(query=delete_query)
-
-    @staticmethod
-    def clean_deprecated_codes(concept_identifier, version):
-        # If we delete the last version from lindas, the codes from the version before it should no longer be deprecated
-        print(f"DEBUG: clean_deprecated_codes concept {concept_identifier} version {version}")
-        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
-
-        delete_query=f"""
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-
-DELETE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?identityUri rdf:type <https://version.link/Deprecated> .
-        ?versionUri rdf:type <https://version.link/Deprecated> .
-    }}
-}}
-WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?identityUri <https://version.link/Version> ?versionUri .
-        ?versionUri <https://version.link/Identity> ?identityUri .
-
-        FILTER(STRSTARTS(STR(?identityUri), "{BASE_URI}{concept_identifier}/"))
-
-        FILTER(STRSTARTS(STR(?versionUri), "{BASE_URI}{concept_identifier}/"))
-        FILTER(STRENDS(STR(?versionUri), "/version/{version}"))
-    }}
-}}
-"""
-        if not DEBUG_LOCAL_TEST:
-            with stardog.Connection(database, **conn_details) as conn:
-                conn.update(query=delete_query)
-
 
 class I14YAPIHelper:
 

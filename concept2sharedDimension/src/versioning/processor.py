@@ -25,17 +25,10 @@ class VersionProcessor:
         else:
             concepts = [I14YAPIHelper.get_concept_data(id)['data'] for id in concept_ids]
 
-        # If there are already concepts on LINDAS, we have to process differently concepts from i14y that have changed since the last upload on LINDAS
         if not clear_graph:
 
-            # Versions are sorted in chronological order
-            lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
+            concepts_to_delete_identifiers = set()
 
-            concepts_to_delete_identifiers = set(lindas_concept_versions.keys()) - set(
-                [c["identifier"] for c in I14YAPIHelper.get_all_concepts(registration_statuses)]
-            )
-
-            concepts_to_update = []
             concepts_unchanged = []
 
             for concept in concepts:
@@ -44,12 +37,17 @@ class VersionProcessor:
                 # Versions are sorted in chronological order
                 i14y_code_versions = I14YAPIHelper.get_i14y_code_versions(identifier)
                 lindas_code_versions = LindasAPIHelper.get_lindas_code_versions(identifier)
+
+                if set(i14y_code_versions.keys()) != set(lindas_code_versions.keys()):
+                    print(f"DEBUG: for concept {identifier} there are different versions on LINDAS and i14y")
+                    concepts_to_delete_identifiers.add(identifier)
+                    continue
+
                 nb_same_versions = 0
                 for version, codes in i14y_code_versions.items():
                     if codes != lindas_code_versions.get(version, {}):
                         print(f"DEBUG: for concept {identifier} version {version} there is a difference between i14y and lindas codes")
-                        concepts_to_update.append(concept_id)
-                        self.process_existing_concept(concept_id, version)
+                        concepts_to_delete_identifiers.add(identifier)
                         break
                     else:
                         print(f"DEBUG: for concept {identifier} version {version} there is no difference between i14y and lindas codes")
@@ -57,36 +55,12 @@ class VersionProcessor:
 
                 if nb_same_versions == len(lindas_code_versions.keys()):
                     concepts_unchanged.append(concept_id)
-                elif len(i14y_code_versions.keys()) < len(lindas_code_versions.keys()):
-                    print(f"DEBUG: for concept {identifier} there are less versions than on LINDAS")
-                    concepts_to_update.append(concept_id)
-                    already_replaced_lindas=False
-                    versions_to_delete=set()
-                    # In this case, we have less versions on I14Y than on LINDAS, we need to delete some versions
-                    last_version_i14y = list(i14y_code_versions.keys())[0]
-                    for i,lindas_version in enumerate(lindas_concept_versions[identifier]):
-                        print(f"DEBUG: check if concept {identifier} lindas version {lindas_version} is in i14y_code_versions {list(i14y_code_versions.keys())}")
-                        if lindas_version not in i14y_code_versions.keys():
-                            versions_to_delete.add(lindas_version)
-                            if not already_replaced_lindas:
-                                print(f"DEBUG: for concept {identifier} there is version {lindas_version} on LINDAS but not on I14Y")
-                                print(f"DEBUG: last_version_i14y is {last_version_i14y}")
-                                self.process_existing_concept(concept_id, last_version_i14y)
-                                already_replaced_lindas = True
-                        else:
-                            last_version_i14y = lindas_version
-
-                    for lindas_version in versions_to_delete:
-                        LindasAPIHelper.delete_concept_version_graph(identifier, lindas_version)
-                        # If the deleted version is the last one, the deprecated codes of the version before should not be deprecated anymore
-                        if lindas_version == lindas_concept_versions[identifier][-1]:
-                            LindasAPIHelper.clean_deprecated_codes(identifier, last_version_i14y)
 
             for concept_identifier in concepts_to_delete_identifiers:
                 LindasAPIHelper.delete_concept(concept_identifier)
 
-            # We keep only concept ids which are not at all on LINDAS and import them on LINDAS
-            concept_ids = list(set(concept_ids) - set(concepts_to_update) - set(concepts_unchanged))
+            # We reimport only concepts that have changed on I14y
+            concept_ids = list(set(concept_ids) - set(concepts_unchanged))
 
         for concept_id in concept_ids:
             self.process_new_concept(concept_id)
@@ -94,59 +68,6 @@ class VersionProcessor:
         # Print summary of failed concepts
         if self.failed_concepts:
             print(f"Warning: {len(self.failed_concepts)} concept(s) failed to process: {', '.join(self.failed_concepts)}")
-
-        return self.vm.graph
-
-    # Deletes identity graph and all versions
-    def process_existing_concept(self, concept_id, version_to_replace):
-        self.codelist = CodeListManager(self.vm)
-        concept_meta = I14YAPIHelper.get_concept_data(concept_id)
-
-        # Check if concept retrieval failed
-        if concept_meta is None:
-            raise ValueError(f"Concept {concept_id} could not be retrieved")
-
-        concept_identifier = concept_meta["data"].get("identifier")
-        version_data = I14YAPIHelper.get_version_list(concept_identifier)
-        if not version_data:
-            print(f"Skipping concept {concept_identifier}, no version data")
-            return
-
-        if not version_data:
-            raise ValueError("No version data found")
-
-        LindasAPIHelper.delete_concept_identity_graph(concept_identifier)
-
-        i_begin_reimport = len(version_data)
-        i_begin_delete = len(version_data)
-        # version_data is already sorted in chronological order (from older to newer)
-        for i, current_data in enumerate(version_data):
-            previous_data = version_data[i - 1] if i > 0 else None
-            next_data = version_data[i + 1] if i < len(version_data) - 1 else None
-            # The idea is that we don't need to touch the links between all the old versions that are already synchronized with LINDAS
-            # We only need to make succesor/predecessor links between the latest up to date version on LINDAS up until the newest from I14Y
-            # Which means that if next_data is already in LINDAS and up to date, we don't need to make succesor/predecessor links because they are already present
-            # The last element of version_data is the new Identity graph
-            if (
-                current_data["version"] != version_to_replace
-                and next_data
-                and next_data["version"] != version_to_replace
-                and i < i_begin_reimport
-            ):
-                print(f"DEBUG: continue in process_existing_concept for concept {current_data['identifier']} version {current_data['version']}")
-                continue
-            i_begin_reimport = i
-            if current_data["version"] == version_to_replace or i > i_begin_delete:
-                print(f"DEBUG: delete in process_existing_concept on LINDAS concept {current_data['identifier']} version {current_data['version']}")
-                i_begin_delete = i
-                LindasAPIHelper.delete_concept_version_graph(current_data["identifier"],current_data["version"])
-            print(f"DEBUG: reimport in process_existing_concept concept {current_data['identifier']} version {current_data['version']}")
-            self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
-
-            if i == len(version_data) - 1:
-                self._process_latest_version(current_data)
-            else:
-                self._process_older_version(current_data, next_data)
 
         return self.vm.graph
 

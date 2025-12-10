@@ -93,6 +93,15 @@ jobs:
             print(f"total_concepts={len(ids)}", file=gh)
             print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
+      - name: Delete concepts on LINDAS that are not on I14Y
+        id: delete-orhapned-concepts-lindas
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from concept2sharedDimension.src.versioning.utils import delete_orphaned_concepts_lindas
+          delete_orphaned_concepts_lindas()
+          PY
   process-batches:
     needs: get-concepts
     if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
