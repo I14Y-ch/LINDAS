@@ -10,7 +10,7 @@ jobs:
       CLEAR_GRAPH: true
       STARDOG_URL: 'https://stardog-test.cluster.ldbar.ch/lindas'
       LINDAS_QUERY_URL: 'https://test.lindas.admin.ch/query'
-      BASE_API_URL: 'https://api-a.i14y.admin.ch/api/public/v1/concepts/'
+      BASE_API_URL: 'https://api.i14y.admin.ch/api/public/v1/concepts/'
       BATCH_SIZE: '10'
     secrets:
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
