@@ -87,6 +87,11 @@ def main():
             if concept_count != expected_concepts:
                 print(f"WARNING: Processed {concept_count} concepts but expected {expected_concepts}")
 
+        if concept_count == 0 and version_count==0:
+            if os.path.exists(output_file):
+                os.remove(output_file)
+                print(f"{output_file} deleted because no concepts have been updated")
+
     except Exception as e:
         print(f"\nERROR: Processing failed - {str(e)}")
         import traceback
