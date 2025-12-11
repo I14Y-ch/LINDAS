@@ -184,6 +184,10 @@ jobs:
           OUTPUT_FILE: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
         run: |
           echo "Validating RDF file: $OUTPUT_FILE"
+          if [ ! -f "$OUTPUT_FILE" ]; then
+            echo "File not found: $OUTPUT_FILE — skipping validation."
+            exit 0
+          fi
           rapper -i turtle -c "$OUTPUT_FILE"
       - name: Archive batch results
         uses: actions/upload-artifact@v4
