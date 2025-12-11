@@ -197,9 +197,34 @@ jobs:
           path: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
 
+  detect-ttl-output:
+    needs: process-batches
+    runs-on: ubuntu-latest
+    outputs:
+      has_ttl: ${{ steps.detect.outputs.has_ttl }}
+
+    steps:
+      - name: Download all batch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: batches
+          pattern: batch-*-output
+          merge-multiple: true
+
+      - name: Detect if any TTL exists
+        id: detect
+        run: |
+          count=$(find batches -name "*.ttl" | wc -l)
+          echo "Found $count TTL files"
+          if [ "$count" -gt 0 ]; then
+            echo "has_ttl=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_ttl=false" >> $GITHUB_OUTPUT
+          fi
+
   clear-and-upload:
-    needs: [get-concepts, process-batches]
-    if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
+    needs: [get-concepts, process-batches, detect-ttl-output]
+    if: ${{ needs.get-concepts.outputs.total_concepts != '0' && needs.detect-ttl-output.outputs.has_ttl == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
