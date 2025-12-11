@@ -32,7 +32,8 @@ def main():
         output_file = OUTPUT_FILE_NAME
 
     processor = VersionProcessor(BASE_URI,output_file=output_file)
-    CatalogManager(processor.vm).create_catalog_description()
+    if CLEAR_GRAPH:
+        CatalogManager(processor.vm).create_catalog_description()
 
     try:
         # Priority 1: Check for environment variable (used by GitHub Actions)
