@@ -274,6 +274,7 @@ jobs:
           from urllib.parse import urlparse
           import stardog
           import requests
+          import time
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
