@@ -306,7 +306,7 @@ jobs:
           }
 
           max_retries = 5
-          retry_delay = 30  # seconds
+          retry_delay = 10  # seconds
 
           with stardog.Connection(database, **conn_details) as conn:
 
