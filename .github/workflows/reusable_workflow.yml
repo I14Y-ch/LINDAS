@@ -318,14 +318,11 @@ jobs:
                       print(f"Graph {target_graph} dropped successfully")
                       break
                   except Exception as e:
-                      conn.rollback()
-                      if "QEWCE2" in str(e):
-                          print(f"Write conflict detected, retrying in {retry_delay}s (attempt {attempt}/{max_retries})")
-                          time.sleep(retry_delay)
-                      else:
-                          raise RuntimeError(f"Failed to drop graph: {e}")
+                      print(f"Retrying in {retry_delay}s (attempt {attempt}/{max_retries})")
+                      time.sleep(retry_delay)
+
               else:
-                  raise RuntimeError("Failed to drop graph after multiple retries due to write conflicts")
+                  raise RuntimeError("Failed to drop graph after multiple retries")
           EOF
       - name: Upload all batches to Stardog
         env:
