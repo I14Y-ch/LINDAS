@@ -275,6 +275,7 @@ jobs:
           import stardog
           import requests
           import time
+          import traceback
 
           stardog_user = os.environ['STARDOG_USER']
           stardog_password = os.environ['STARDOG_PASSWORD']
@@ -306,24 +307,66 @@ jobs:
               'session': session
           }
 
-          max_retries = 5
-          retry_delay = 10  # seconds
+          BATCH_SIZE = 25000
+          SLEEP_BETWEEN_BATCHES = 0.25  # seconds
+
+          def delete_graph_in_batches(conn, graph_uri):
+              """
+              Delete all triples from a graph using batched SPARQL updates.
+              Safe for shared databases.
+              """
+              batch = 0
+
+              while True:
+                  batch += 1
+                  print(f"Deleting batch {batch} (up to {BATCH_SIZE} triples)")
+
+                  delete_query = f"""
+                  DELETE {{
+                    GRAPH <{graph_uri}> {{ ?s ?p ?o }}
+                  }}
+                  WHERE {{
+                    GRAPH <{graph_uri}> {{ ?s ?p ?o }}
+                  }}
+                  LIMIT {BATCH_SIZE}
+                  """
+
+                  conn.begin()
+                  conn.update(delete_query)
+                  conn.commit()
+
+                  # Check remaining triples
+                  count_query = f"""
+                  SELECT (COUNT(*) AS ?n)
+                  WHERE {{
+                    GRAPH <{graph_uri}> {{ ?s ?p ?o }}
+                  }}
+                  """
+
+                  result = conn.select(count_query)
+                  remaining = int(next(iter(result))['n'])
+
+                  print(f"Remaining triples: {remaining}")
+
+                  if remaining == 0:
+                      print(f"Graph {graph_uri} successfully emptied")
+                      break
+
+                  time.sleep(SLEEP_BETWEEN_BATCHES)
 
           with stardog.Connection(database, **conn_details) as conn:
+              try:
+                  print("Trying DROP GRAPH first")
+                  conn.begin()
+                  conn.update(f"DROP GRAPH <{target_graph}>")
+                  conn.commit()
+                  print(f"Graph {target_graph} dropped successfully")
 
-              for attempt in range(1, max_retries + 1):
-                  try:
-                      conn.begin()
-                      conn.update(f"DROP GRAPH <{target_graph}>")
-                      conn.commit()
-                      print(f"Graph {target_graph} dropped successfully")
-                      break
-                  except Exception as e:
-                      print(f"Retrying in {retry_delay}s (attempt {attempt}/{max_retries})")
-                      time.sleep(retry_delay)
+              except Exception:
+                  print("DROP GRAPH failed, falling back to batch deletion")
+                  traceback.print_exc()
 
-              else:
-                  raise RuntimeError("Failed to drop graph after multiple retries")
+                  delete_graph_in_batches(conn, target_graph)
           EOF
       - name: Upload all batches to Stardog
         env:
