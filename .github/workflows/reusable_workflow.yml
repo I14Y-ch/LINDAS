@@ -274,7 +274,6 @@ jobs:
           from urllib.parse import urlparse
           import stardog
           import requests
-          import time
           import traceback
 
           stardog_user = os.environ['STARDOG_USER']
@@ -308,13 +307,8 @@ jobs:
           }
 
           BATCH_SIZE = 25000
-          SLEEP_BETWEEN_BATCHES = 0.25  # seconds
 
           def delete_graph_in_batches(conn, graph_uri):
-              """
-              Delete all triples from a graph using batched SPARQL updates.
-              Safe for shared databases.
-              """
               batch = 0
 
               while True:
@@ -335,24 +329,11 @@ jobs:
                   conn.update(delete_query)
                   conn.commit()
 
-                  # Check remaining triples
-                  count_query = f"""
-                  SELECT (COUNT(*) AS ?n)
-                  WHERE {{
-                    GRAPH <{graph_uri}> {{ ?s ?p ?o }}
-                  }}
-                  """
+                  remaining_triples = conn.ask(f"ASK {{ GRAPH <{graph_uri}> {{ ?s ?p ?o }} }}")
 
-                  result = conn.select(count_query)
-                  remaining = int(next(iter(result))['n'])
-
-                  print(f"Remaining triples: {remaining}")
-
-                  if remaining == 0:
+                  if not remaining_triples:
                       print(f"Graph {graph_uri} successfully emptied")
                       break
-
-                  time.sleep(SLEEP_BETWEEN_BATCHES)
 
           with stardog.Connection(database, **conn_details) as conn:
               try:
