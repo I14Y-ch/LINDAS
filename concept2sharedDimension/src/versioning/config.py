@@ -26,6 +26,8 @@ LINDAS_QUERY_URL = os.environ.get("LINDAS_QUERY_URL", "https://test.lindas.admin
 CLEAR_GRAPH = os.environ.get("CLEAR_GRAPH", "false") == "true"
 TARGET_GRAPH = os.environ.get("TARGET_GRAPH", "https://lindas.admin.ch/fso/i14y")
 
+PROXIES = {"http": "http://proxy-bvcol.admin.ch:8080", "https": "http://proxy-bvcol.admin.ch:8080"}
+
 # namespace for the URI construction
 BASE_URI = "https://register.ld.admin.ch/i14y/concept/"
 

@@ -56,7 +56,11 @@ class LindasAPIHelper:
             endpoint = stardog_url
 
         session = r.Session()
-        session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=3600, **kwargs)
+        session.request = lambda *args, **kwargs: r.Session.request(session, *args, timeout=360, **kwargs)
+
+        if DEBUG_LOCAL_TEST:
+            session.proxies.update(PROXIES)
+            session.verify = False
 
         conn_details = {
             "endpoint": endpoint,
@@ -70,14 +74,10 @@ class LindasAPIHelper:
     @staticmethod
     def lindas_query(query):
         url = LINDAS_QUERY_URL
-        proxies = {
-            "http": "http://proxy-bvcol.admin.ch:8080",
-            "https": "http://proxy-bvcol.admin.ch:8080"
-        }
         headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
 
         if DEBUG_LOCAL_TEST:
-            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False,proxies=proxies)
+            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False,proxies=PROXIES)
         else:
             resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
         resp.raise_for_status()
@@ -192,9 +192,9 @@ WHERE {{
     }}
 }}
 """
-        if not DEBUG_LOCAL_TEST:
-            with stardog.Connection(database, **conn_details) as conn:
-                conn.update(query=delete_query)
+
+        with stardog.Connection(database, **conn_details) as conn:
+            conn.update(query=delete_query)
 
 class I14YAPIHelper:
 
