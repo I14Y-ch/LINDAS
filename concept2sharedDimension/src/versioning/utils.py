@@ -39,8 +39,46 @@ class LindasAPIHelper:
     lindas_code_versions = {}
 
     @staticmethod
+    def graphdb_update(update_query):
+        graphdb_url = os.environ.get("LINDAS_UPDATE_URL", "")
+        graphdb_user = os.environ.get("STARDOG_USER", "")
+        graphdb_password = os.environ.get("STARDOG_PASSWORD", "")
+
+        if not graphdb_url.endswith("/statements"):
+            graphdb_url += "/statements"
+
+        headers = {
+            "Content-Type": "application/sparql-update",
+        }
+
+        auth = None
+        if graphdb_user and graphdb_password:
+            auth = (graphdb_user, graphdb_password)
+
+        if DEBUG_LOCAL_TEST:
+            resp = r.post(
+                graphdb_url,
+                data=update_query,
+                headers=headers,
+                auth=auth,
+                timeout=10,
+                verify=False,
+                proxies=PROXIES,
+            )
+        else:
+            resp = r.post(
+                graphdb_url,
+                data=update_query,
+                headers=headers,
+                auth=auth,
+                timeout=300,
+            )
+
+        resp.raise_for_status()
+
+    @staticmethod
     def get_stardog_db_conn():
-        stardog_url = os.environ.get("STARDOG_URL","")
+        stardog_url = os.environ.get("LINDAS_UPDATE_URL","")
         stardog_user = os.environ.get("STARDOG_USER","")
         stardog_password = os.environ.get("STARDOG_PASSWORD","")
 
@@ -90,21 +128,23 @@ class LindasAPIHelper:
     def get_lindas_concept_versions():
         # Only fetch from LINDAS if we don't already have concept versions cached
         if not LindasAPIHelper.lindas_concept_versions:
-
             query = f"""
-    PREFIX prov: <http://www.w3.org/ns/prov#>
-    PREFIX schema: <http://schema.org/>
+                PREFIX prov: <http://www.w3.org/ns/prov#>
+                PREFIX schema: <http://schema.org/>
+                PREFIX vl: <https://version.link/>
+                PREFIX pav: <http://purl.org/pav/>
 
-    SELECT ?concept_uri ?validFrom
-    WHERE {{
-        GRAPH <{TARGET_GRAPH}> {{
-            ?concept_uri 
-                prov:wasDerivedFrom ?source ;
-                schema:validFrom ?validFrom .
-            FILTER(CONTAINS(STR(?concept_uri), "/version/"))
-        }}
-    }}
-    """
+                SELECT ?version ?concept_identifier ?validFrom
+                WHERE {{
+                    GRAPH <{TARGET_GRAPH}> {{
+                        ?concept a schema:DefinedTermSet;
+                            schema:identifier ?concept_identifier;
+                            schema:validFrom ?validFrom ;
+                            a vl:Version ;
+                            pav:version ?version.
+                    }}
+                }}
+                """
             print("DEBUG: get_existing_concepts_lindas API call")
 
             rows = []
@@ -112,15 +152,12 @@ class LindasAPIHelper:
             results = LindasAPIHelper.lindas_query(query)
 
             for result in results:
-                concept_uri = result["concept_uri"]["value"]
+                concept_identifier = result["concept_identifier"]["value"]
                 valid_from = result["validFrom"]["value"]
-
-                # Extract identifier and version from the URI
-                identifier = concept_uri.split("/version/")[0].rstrip("/").split("/")[-1]
-                version = concept_uri.split("/version/")[-1]
+                version = result["version"]["value"]
 
                 # Collect all rows before sorting
-                rows.append((identifier, version, valid_from))
+                rows.append((concept_identifier, version, valid_from))
 
             # --- SORTING ---
             # Sort first by validFrom (ISO date string ⇒ lexicographic sort is correct),
@@ -130,8 +167,8 @@ class LindasAPIHelper:
             # --- BUILD SORTED DICTIONARY ---
             concept_versions = {}
 
-            for identifier, version, valid_from in rows:
-                concept_versions.setdefault(identifier, []).append(version)
+            for concept_identifier, version, valid_from in rows:
+                concept_versions.setdefault(concept_identifier, []).append(version)
 
             total_versions = sum(len(vs) for vs in concept_versions.values())
             print(f"DEBUG: {len(concept_versions)} concepts with {total_versions} versions")
@@ -144,25 +181,28 @@ class LindasAPIHelper:
     def get_lindas_code_versions(concept_identifier):
         if concept_identifier not in LindasAPIHelper.lindas_code_versions.keys():
             query = f"""
-PREFIX schema: <http://schema.org/>
-SELECT ?code_uri
-WHERE {{
-  GRAPH <{TARGET_GRAPH}> {{
-    ?code_uri a schema:DefinedTerm
-    FILTER (STRSTARTS(STR(?code_uri),"{BASE_URI}{concept_identifier}/"))
-    FILTER(CONTAINS(STR(?code_uri), "/version/"))
-  }}
-}}
-"""
+                PREFIX schema: <http://schema.org/>
+                PREFIX vl: <https://version.link/>
+                PREFIX pav: <http://purl.org/pav/>
+                SELECT ?code_identifier ?version
+                WHERE {{
+                GRAPH <{TARGET_GRAPH}> {{
+                    ?code a schema:DefinedTerm;
+                        a vl:Version;
+                        schema:identifier ?code_identifier.
+                    ?concept a schema:DefinedTermSet;
+                            schema:identifier "{concept_identifier}";
+                            schema:hasDefinedTerm ?code;
+                            pav:version ?version.
+                }}
+                }}
+                """
             version_codes_dict = {}
             print("DEBUG: get_lindas_code_versions get API call for concept_identifier: " + concept_identifier)
             results = LindasAPIHelper.lindas_query(query)
             for result in results:
-                code_uri = result["code_uri"]["value"]
-                # code_uri is like https://register.ld.admin.ch/i14y/concept/LINDAS_testConcept/aaa/version/1.0.0
-                parts = code_uri.split(f"/{concept_identifier}/")[-1].split("/version/")
-                # code=aaa and version=1.0.0 with the example above
-                code, version = parts[0], parts[1]
+                code = result.get("code_identifier", {}).get("value")
+                version = result.get("version", {}).get("value")
                 if version not in version_codes_dict.keys():
                     version_codes_dict[version] = set()
 
@@ -175,7 +215,20 @@ WHERE {{
     @staticmethod
     def delete_concept(concept_identifier):
         print(f"DEBUG: delete_concept concept {concept_identifier}")
-        database, conn_details = LindasAPIHelper.get_stardog_db_conn()
+        # The regex is the simpliest way to select ALL that is linked to a given concept, if we begin to list all the predicates that links BNodes etc. the query is even more slow
+        # ?concept a schema:DefinedTermSet;
+        #      schema:identifier "nogaCode" .
+        # ?code a schema:DefinedTerm;
+        #     schema:inDefinedTermSet ?concept.
+        # OPTIONAL {?concept schema:hasPart ?annotation_node.}
+        # OPTIONAL {?annotation_node oa:hasBody ?body_node.}
+        # OPTIONAL {?concept shacl:property ?shacl_property.}
+        # OPTIONAL {?concept dcterms:subject ?theme_bnode.}
+        # OPTIONAL {?concept dcterms:conformsTo ?conformTo_bnode.}
+        # OPTIONAL {?concept cubelink:inHierarchy ?hierarchy.}
+        # Then we get all ?s ?p ?o where ?s or ?o is any of the selected nodes above
+        # But with this method, it takes way too much time or it crashes even
+        # So we keep it simple: 
         delete_query = f"""
 DELETE {{
     GRAPH <{TARGET_GRAPH}> {{
@@ -193,8 +246,7 @@ WHERE {{
 }}
 """
 
-        with stardog.Connection(database, **conn_details) as conn:
-            conn.update(query=delete_query)
+        LindasAPIHelper.graphdb_update(delete_query)
 
 class I14YAPIHelper:
 

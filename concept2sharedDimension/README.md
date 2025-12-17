@@ -89,10 +89,10 @@ In the folder `.github/workflows` you can find the `main.yml` file with the istr
 
 The authentication is done via GitHub secrets `STARDOG_USERNAME` and `STARDOG_PASSWORD_TEST`. The instructions are set for the test environment. To change to production:
 
-1. Modify the `STARDOG_URL` in the `env` section of `main.yml`:
+1. Modify the `LINDAS_UPDATE_URL` in the `env` section of `main.yml`:
    ```yaml
    env:
-     STARDOG_URL: 'https://stardog-prod.cluster.ldbar.ch/lindas'  # Change from test to prod
+     LINDAS_UPDATE_URL: 'https://stardog-prod.cluster.ldbar.ch/lindas'  # Change from test to prod
    ```
 
 2. Update the password secret references in both the "Clear Stardog Graph" and "Upload to Stardog" steps:
