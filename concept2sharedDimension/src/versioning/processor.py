@@ -1,11 +1,6 @@
-import os
-from urllib.parse import urlparse
-
-import requests
 from .core import ConceptMetadataManager, CodeListManager, GraphManager
 from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, timer
-from .config import BASE_URI, CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, TARGET_GRAPH, vl
-import stardog
+from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, OUTPUT_FILE_NAME, vl
 
 class VersionProcessor:
     def __init__(self, base_uri,output_file=OUTPUT_FILE_NAME):

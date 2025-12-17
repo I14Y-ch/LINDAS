@@ -263,93 +263,23 @@ jobs:
               rapper -i turtle -c "$file"
             fi
           done
-      - name: Clear Stardog Graph
+      - name: Clear LINDAS Graph
         if: env.CLEAR_GRAPH == 'true'
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
         run: |
           python3 << 'EOF'
-          import os
-          from urllib.parse import urlparse
-          import stardog
-          import requests
-          import traceback
-
-          stardog_user = os.environ['STARDOG_USER']
-          stardog_password = os.environ['STARDOG_PASSWORD']
-          stardog_url = os.environ['LINDAS_UPDATE_URL']
-          target_graph = os.environ['TARGET_GRAPH']
+          from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
 
           print(f'Dropping graph: {target_graph}')
-          print(f'Using URL: {stardog_url}')
-          print(f'Using user: {stardog_user}')
 
-          # Extract database from URL
-          parsed = urlparse(stardog_url)
-          path_parts = parsed.path.strip("/").split("/")
+          LindasAPIHelper.graphdb_update(f"DROP GRAPH <{target_graph}>")
 
-          if len(path_parts) > 0 and path_parts[-1]:
-              database = path_parts[-1]
-              endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
-          else:
-              database = os.environ.get("STARDOG_DATABASE")
-              endpoint = stardog_url
+          print(f"Graph {target_graph} dropped successfully")
 
-          session = requests.Session()
-          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
-
-          conn_details = {
-              'endpoint': endpoint,
-              'username': stardog_user,
-              'password': stardog_password,
-              'session': session
-          }
-
-          BATCH_SIZE = 25000
-
-          def delete_graph_in_batches(conn, graph_uri):
-              batch = 0
-
-              while True:
-                  batch += 1
-                  print(f"Deleting batch {batch} (up to {BATCH_SIZE} triples)")
-
-                  delete_query = f"""
-                  DELETE {{
-                    GRAPH <{graph_uri}> {{ ?s ?p ?o }}
-                  }}
-                  WHERE {{
-                    GRAPH <{graph_uri}> {{ ?s ?p ?o }}
-                  }}
-                  LIMIT {BATCH_SIZE}
-                  """
-
-                  conn.begin()
-                  conn.update(delete_query)
-                  conn.commit()
-
-                  remaining_triples = conn.ask(f"ASK {{ GRAPH <{graph_uri}> {{ ?s ?p ?o }} }}")
-
-                  if not remaining_triples:
-                      print(f"Graph {graph_uri} successfully emptied")
-                      break
-
-          with stardog.Connection(database, **conn_details) as conn:
-              try:
-                  print("Trying DROP GRAPH first")
-                  conn.begin()
-                  conn.update(f"DROP GRAPH <{target_graph}>")
-                  conn.commit()
-                  print(f"Graph {target_graph} dropped successfully")
-
-              except Exception:
-                  print("DROP GRAPH failed, falling back to batch deletion")
-                  traceback.print_exc()
-
-                  delete_graph_in_batches(conn, target_graph)
           EOF
-      - name: Upload all batches to Stardog
+      - name: Upload all batches to LINDAS
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
@@ -358,53 +288,21 @@ jobs:
         run: |
           python3 << 'EOF'
           import os, glob
-          from urllib.parse import urlparse
-          import stardog
-          import requests
+          from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
 
-          stardog_user = os.environ['STARDOG_USER']
-          stardog_password = os.environ['STARDOG_PASSWORD']
-          stardog_url = os.environ['LINDAS_UPDATE_URL']
           target_graph = os.environ['TARGET_GRAPH']
-
-          # Extract database from URL
-          parsed = urlparse(stardog_url)
-          path_parts = parsed.path.strip("/").split("/")
-          if len(path_parts) > 0 and path_parts[-1]:
-              database = path_parts[-1]
-              endpoint = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
-          else:
-              database = os.environ.get("STARDOG_DATABASE")
-              endpoint = stardog_url
-
-          print(f"Using endpoint: {endpoint}")
-          print(f"Using database: {database}")
-
-          session = requests.Session()
-          session.request = lambda *args, **kwargs: requests.Session.request(session, *args, timeout=3600, **kwargs)
-
-          conn_details = {
-              'endpoint': endpoint,
-              'username': stardog_user,
-              'password': stardog_password,
-              "session": session
-          }
 
           batch_count = 0
           failed_uploads = 0
 
-          with stardog.Connection(database, **conn_details) as conn:
-              for file_path in sorted(glob.glob("batches/*.ttl")):
-                  try:
-                      file_content = stardog.content.File(file=file_path, content_type="text/turtle")
-                      conn.begin()
-                      conn.add(file_content, graph_uri = target_graph)
-                      conn.commit()
-                      batch_count += 1
-                      print(f"SUCCESS: Uploaded {file_path}")
-                  except Exception as e:
-                      failed_uploads += 1
-                      print(f"FAILED: {file_path} - {e}")
+          for file_path in sorted(glob.glob("batches/*.ttl")):
+              try:
+                  LindasAPIHelper.graphdb_upload_ttl(file_path,target_graph)
+                  batch_count += 1
+                  print(f"SUCCESS: Uploaded {file_path}")
+              except Exception as e:
+                  failed_uploads += 1
+                  print(f"FAILED: {file_path} - {e}")
 
           # Commit only if transaction itself is fine
           if failed_uploads == 0:
@@ -427,5 +325,5 @@ jobs:
           echo "Processing Summary:"
           echo "Total concepts: ${{ needs.get-concepts.outputs.total_concepts }}"
           echo "Batch size: ${{ env.BATCH_SIZE }}"
-          echo "All batches have been processed and uploaded to Stardog"
+          echo "All batches have been processed and uploaded to LINDAS"
           echo "Target graph: ${{ env.TARGET_GRAPH }}"

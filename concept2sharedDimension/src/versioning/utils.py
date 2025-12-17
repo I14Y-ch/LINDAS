@@ -1,7 +1,6 @@
 from time import time
 from urllib.parse import urlparse
 import requests as r
-import stardog
 from .config import *
 import warnings
 from urllib3.exceptions import InsecureRequestWarning
@@ -75,6 +74,50 @@ class LindasAPIHelper:
             )
 
         resp.raise_for_status()
+
+    @staticmethod
+    def graphdb_upload_ttl(file_path, graph_uri):
+        """
+        Upload un fichier Turtle vers GraphDB, en streaming.
+        """
+        graphdb_url = os.environ.get("LINDAS_UPDATE_URL", "")
+        graphdb_user = os.environ.get("STARDOG_USER", "")
+        graphdb_password = os.environ.get("STARDOG_PASSWORD", "")
+
+        if not graphdb_url.endswith("/statements"):
+            graphdb_url += "/statements"
+
+        if graph_uri:
+            graphdb_url += f"?context={graph_uri}"
+
+        headers = {
+            "Content-Type": "text/turtle"
+        }
+
+        auth = (graphdb_user, graphdb_password) if graphdb_user and graphdb_password else None
+
+        with open(file_path, "rb") as f:
+            if DEBUG_LOCAL_TEST:
+                resp = r.post(
+                    graphdb_url,
+                    data=f,
+                    headers=headers,
+                    auth=auth,
+                    timeout=10,
+                    verify=False,
+                    proxies=PROXIES,
+                )
+            else:
+                resp = r.post(
+                    graphdb_url,
+                    data=f,
+                    headers=headers,
+                    auth=auth,
+                    timeout=300,
+                )
+
+        resp.raise_for_status()
+        print(f"SUCCESS: Uploaded {file_path}")
 
     @staticmethod
     def get_stardog_db_conn():
@@ -228,7 +271,7 @@ class LindasAPIHelper:
         # OPTIONAL {?concept cubelink:inHierarchy ?hierarchy.}
         # Then we get all ?s ?p ?o where ?s or ?o is any of the selected nodes above
         # But with this method, it takes way too much time or it crashes even
-        # So we keep it simple: 
+        # So we keep it simple:
         delete_query = f"""
 DELETE {{
     GRAPH <{TARGET_GRAPH}> {{
