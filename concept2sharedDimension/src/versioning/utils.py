@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 import requests as r
 from .config import *
 import warnings
+from urllib.parse import quote
 from urllib3.exceptions import InsecureRequestWarning
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
@@ -60,7 +61,7 @@ class LindasAPIHelper:
                 data=update_query,
                 headers=headers,
                 auth=auth,
-                timeout=10,
+                timeout=300,
                 verify=False,
                 proxies=PROXIES,
             )
@@ -77,9 +78,6 @@ class LindasAPIHelper:
 
     @staticmethod
     def graphdb_upload_ttl(file_path, graph_uri):
-        """
-        Upload un fichier Turtle vers GraphDB, en streaming.
-        """
         graphdb_url = os.environ.get("LINDAS_UPDATE_URL", "")
         graphdb_user = os.environ.get("STARDOG_USER", "")
         graphdb_password = os.environ.get("STARDOG_PASSWORD", "")
@@ -88,7 +86,7 @@ class LindasAPIHelper:
             graphdb_url += "/statements"
 
         if graph_uri:
-            graphdb_url += f"?context={graph_uri}"
+            graphdb_url += f"?context={quote(graph_uri, safe='')}"
 
         headers = {
             "Content-Type": "text/turtle"
@@ -103,7 +101,7 @@ class LindasAPIHelper:
                     data=f,
                     headers=headers,
                     auth=auth,
-                    timeout=10,
+                    timeout=1800,
                     verify=False,
                     proxies=PROXIES,
                 )
@@ -113,7 +111,7 @@ class LindasAPIHelper:
                     data=f,
                     headers=headers,
                     auth=auth,
-                    timeout=300,
+                    timeout=1800,
                 )
 
         resp.raise_for_status()

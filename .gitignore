@@ -213,3 +213,5 @@ concept2sharedDimension/src/local/test graph connection.py
 concept2sharedDimension/src/local_tests*
 concept2sharedDimension/src/debug*
 graph*.html
+
+batches/
