@@ -89,7 +89,7 @@ class LindasAPIHelper:
             graphdb_url += f"?context={quote(graph_uri, safe='')}"
 
         headers = {
-            "Content-Type": "text/turtle"
+            "Content-Type": "application/x-turtle"
         }
 
         auth = (graphdb_user, graphdb_password) if graphdb_user and graphdb_password else None
@@ -112,6 +112,7 @@ class LindasAPIHelper:
                     headers=headers,
                     auth=auth,
                     timeout=1800,
+                    verify=False
                 )
 
         resp.raise_for_status()

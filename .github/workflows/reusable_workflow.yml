@@ -302,7 +302,6 @@ jobs:
               try:
                   LindasAPIHelper.graphdb_upload_ttl(file_path,target_graph)
                   batch_count += 1
-                  print(f"SUCCESS: Uploaded {file_path}")
               except Exception as e:
                   failed_uploads += 1
                   print(f"FAILED: {file_path} - {e}")
