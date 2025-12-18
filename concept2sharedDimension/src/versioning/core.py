@@ -46,7 +46,7 @@ class StreamingTurtleWriter:
     def bind(self, prefix, uri):
         """Bind prefix, exactly like rdflib.Graph.bind()."""
         self.prefixes[prefix] = uri
-        self.f.write(f"@prefix {prefix}: <{uri}> .\n")
+        # self.f.write(f"@prefix {prefix}: <{uri}> .\n")
 
     def set_current_identifier_version(self, identifier, version):
         self.current_concept_identifier = identifier

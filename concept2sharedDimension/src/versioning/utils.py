@@ -3,7 +3,6 @@ from urllib.parse import urlparse
 import requests as r
 from .config import *
 import warnings
-from urllib.parse import quote
 from urllib3.exceptions import InsecureRequestWarning
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
@@ -77,7 +76,8 @@ class LindasAPIHelper:
         resp.raise_for_status()
 
     @staticmethod
-    def graphdb_upload_ttl(file_path, graph_uri):
+    def graphdb_upload_ttl(file_path,graph_uri):
+        print(f"Uploading {file_path}")
         graphdb_url = os.environ.get("LINDAS_UPDATE_URL", "")
         graphdb_user = os.environ.get("STARDOG_USER", "")
         graphdb_password = os.environ.get("STARDOG_PASSWORD", "")
@@ -85,38 +85,45 @@ class LindasAPIHelper:
         if not graphdb_url.endswith("/statements"):
             graphdb_url += "/statements"
 
-        if graph_uri:
-            graphdb_url += f"?context={quote(graph_uri, safe='')}"
-
         headers = {
-            "Content-Type": "application/x-turtle"
+            "Content-Type": "text/turtle",
         }
 
-        auth = (graphdb_user, graphdb_password) if graphdb_user and graphdb_password else None
+        params = {
+            "context": f"<{graph_uri}>"
+        }
+
+        auth = None
+        if graphdb_user and graphdb_password:
+            auth = (graphdb_user, graphdb_password)
 
         with open(file_path, "rb") as f:
             if DEBUG_LOCAL_TEST:
-                resp = r.post(
+                response = r.post(
                     graphdb_url,
                     data=f,
                     headers=headers,
                     auth=auth,
                     timeout=1800,
                     verify=False,
+                    params=params,
                     proxies=PROXIES,
                 )
             else:
-                resp = r.post(
+                response = r.post(
                     graphdb_url,
                     data=f,
-                    headers=headers,
-                    auth=auth,
                     timeout=1800,
-                    verify=False
-                )
+                    headers=headers,
+                    verify=False,
+                    params=params,
+                    auth=auth
+            )
 
-        resp.raise_for_status()
-        print(f"SUCCESS: Uploaded {file_path}")
+        if response.status_code == 204:
+            print("Upload successful")
+        else:
+            print(response.status_code, response.text)
 
     @staticmethod
     def get_stardog_db_conn():
