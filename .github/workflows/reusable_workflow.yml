@@ -260,7 +260,7 @@ jobs:
         with:
           path: batches
           pattern: batch-*-output
-          merge-multiple: true
+          merge-multiple: false
 
       - name: List and validate batch files
         run: |
