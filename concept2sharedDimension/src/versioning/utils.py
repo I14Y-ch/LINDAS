@@ -142,11 +142,13 @@ class LindasAPIHelper:
 
             if add_resp.status_code not in (200, 204):
                 # Rollback on error
-                r.post(f"{graphdb_url.rstrip("/")}/transaction/{transaction}/rollback", auth=auth, verify=False)
+                r.post(f"{graphdb_url.rstrip('/')}/transaction/{transaction}/rollback", auth=auth, verify=False)
                 raise Exception(f"Stardog upload failed: {add_resp.status_code} {add_resp.text}")
 
             # Commit transaction
-            commit_resp = r.post(f"{graphdb_url.rstrip("/")}/transaction/{transaction}/commit", auth=auth, verify=False)
+            commit_resp = r.post(
+                f"{graphdb_url.rstrip('/')}/transaction/{transaction}/commit", auth=auth, verify=False
+            )
             commit_resp.raise_for_status()
             print("Upload successful (Stardog)")
 
