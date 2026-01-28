@@ -49,6 +49,8 @@ class LindasAPIHelper:
 
         if not graphdb_url.endswith("/statements") and "graphdb" in graphdb_url:
             graphdb_url += "/statements"
+        elif not graphdb_url.endswith("/update") and "graphdb" not in graphdb_url:
+            graphdb_url += "/update"
 
         headers = {
             "Content-Type": "application/sparql-update",
