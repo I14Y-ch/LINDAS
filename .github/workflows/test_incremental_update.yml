@@ -1,9 +1,8 @@
 name: "[TEST] Incremental Update"
 
 on:
-  # TODO Sergiy: decomment once the workflows are approved
-  # schedule:
-  #   - cron: '0 2 * * *'
+  schedule:
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       STATUSES:
