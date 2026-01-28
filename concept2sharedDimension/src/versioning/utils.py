@@ -47,7 +47,7 @@ class LindasAPIHelper:
         graphdb_user = os.environ.get("STARDOG_USER", "")
         graphdb_password = os.environ.get("STARDOG_PASSWORD", "")
 
-        if not graphdb_url.endswith("/statements"):
+        if not graphdb_url.endswith("/statements") and "graphdb" in graphdb_url:
             graphdb_url += "/statements"
 
         headers = {
