@@ -1,3 +1,8 @@
+name: "[TEST] Sequential update by statuses"
+
+on:
+  workflow_dispatch:
+
 jobs:
   update-concepts:
     strategy:
