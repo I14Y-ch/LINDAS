@@ -125,7 +125,7 @@ class LindasAPIHelper:
             print(f"Started Stardog transaction: {transaction}")
 
             # Add file to transaction
-            add_url = f"{graphdb_url.rstrip("/")}/transaction/{transaction}/add"
+            add_url = f"{graphdb_url.rstrip('/')}/transaction/{transaction}/add"
             params = {"graph-uri": graph_uri}
             print("Posting to URL:", f"{add_url}")
             print("Target graph URI:", graph_uri)
