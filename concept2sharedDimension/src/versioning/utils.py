@@ -117,18 +117,27 @@ class LindasAPIHelper:
 
         # --- Stardog case ---
         else:
+            # Extract server root and database name
+            parsed = urlparse(graphdb_url)
+            path_parts = parsed.path.strip("/").split("/")
+            if len(path_parts) == 0:
+                raise Exception(f"Invalid Stardog URL: {graphdb_url}")
+            database = path_parts[-1]
+            server_root = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
+
             # Begin transaction
-            tx_url = graphdb_url.rstrip("/") + "/transaction/begin"
+            tx_url = server_root.rstrip("/") + "/transaction/begin"
             tx_resp = r.post(tx_url, auth=auth, verify=False)
             tx_resp.raise_for_status()
             transaction = tx_resp.text.strip('"')
             print(f"Started Stardog transaction: {transaction}")
 
             # Add file to transaction
-            add_url = f"{graphdb_url.rstrip('/')}/transaction/{transaction}/add"
-            params = {"graph-uri": graph_uri}
-            print("Posting to URL:", f"{add_url}")
-            print("Target graph URI:", graph_uri)
+            add_url = f"{server_root.rstrip('/')}/{transaction}/add"
+            params = {"graph-uri": graph_uri or database}
+            print("Posting to URL:", add_url)
+            print("Target graph URI:", params["graph-uri"])
+
             with open(file_path, "rb") as f:
                 add_resp = r.post(
                     add_url,
@@ -142,12 +151,12 @@ class LindasAPIHelper:
 
             if add_resp.status_code not in (200, 204):
                 # Rollback on error
-                r.post(f"{graphdb_url.rstrip('/')}/transaction/{transaction}/rollback", auth=auth, verify=False)
+                r.post(f"{server_root.rstrip('/')}/transaction/rollback/{transaction}", auth=auth, verify=False)
                 raise Exception(f"Stardog upload failed: {add_resp.status_code} {add_resp.text}")
 
             # Commit transaction
             commit_resp = r.post(
-                f"{graphdb_url.rstrip('/')}/transaction/{transaction}/commit", auth=auth, verify=False
+                f"{server_root.rstrip('/')}/transaction/commit/{transaction}", auth=auth, verify=False
             )
             commit_resp.raise_for_status()
             print("Upload successful (Stardog)")
