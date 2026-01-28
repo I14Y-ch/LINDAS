@@ -9,6 +9,8 @@ jobs:
       max-parallel: 1
       matrix:
         statuses:
+          - "PreferredStandard"
+          - "PreferredStandard,Qualified"
           - "Qualified,Standard,PreferredStandard"
           - "Qualified,Standard,PreferredStandard,Retired"
           - "Qualified,Standard,PreferredStandard,Retired,Candidate"

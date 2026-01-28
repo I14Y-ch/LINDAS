@@ -83,26 +83,22 @@ class LindasAPIHelper:
 
     @staticmethod
     def graphdb_upload_ttl(file_path, graph_uri):
-        print(f"Uploading {file_path}")
         graphdb_url = os.environ.get("LINDAS_UPDATE_URL", "")
-        graphdb_user = os.environ.get("STARDOG_USER", "")
-        graphdb_password = os.environ.get("STARDOG_PASSWORD", "")
+        user = os.environ.get("STARDOG_USER", "")
+        pwd = os.environ.get("STARDOG_PASSWORD", "")
+        auth = (user, pwd) if user and pwd else None
 
-        if not graphdb_url.endswith("/statements"):
-            graphdb_url += "/statements"
+        print(f"Uploading {file_path} to {graphdb_url}")
 
-        headers = {
-            "Content-Type": "text/turtle",
-        }
+        # --- GraphDB case ---
+        if "graphdb" in graphdb_url.lower():
+            if not graphdb_url.endswith("/statements"):
+                graphdb_url += "/statements"
 
-        params = {"context": f"<{graph_uri}>"}
+            headers = {"Content-Type": "text/turtle"}
+            params = {"context": f"<{graph_uri}>"}
 
-        auth = None
-        if graphdb_user and graphdb_password:
-            auth = (graphdb_user, graphdb_password)
-
-        with open(file_path, "rb") as f:
-            if DEBUG_LOCAL_TEST:
+            with open(file_path, "rb") as f:
                 response = r.post(
                     graphdb_url,
                     data=f,
@@ -111,17 +107,46 @@ class LindasAPIHelper:
                     timeout=1800,
                     verify=False,
                     params=params,
-                    proxies=PROXIES,
-                )
-            else:
-                response = r.post(
-                    graphdb_url, data=f, timeout=1800, headers=headers, verify=False, params=params, auth=auth
+                    proxies=PROXIES if DEBUG_LOCAL_TEST else None,
                 )
 
-        if response.status_code == 204:
-            print("Upload successful")
+            if response.status_code == 204:
+                print("Upload successful (GraphDB)")
+            else:
+                raise Exception(f"GraphDB upload failed: {response.status_code} {response.text}")
+
+        # --- Stardog case ---
         else:
-            print(response.status_code, response.text)
+            # Begin transaction
+            tx_url = graphdb_url.rstrip("/") + "/transaction/begin"
+            tx_resp = r.post(tx_url, auth=auth, verify=False)
+            tx_resp.raise_for_status()
+            transaction = tx_resp.text.strip('"')
+            print(f"Started Stardog transaction: {transaction}")
+
+            # Add file to transaction
+            add_url = f"{graphdb_url}/transaction/{transaction}/add"
+            params = {"graph-uri": graph_uri}
+            with open(file_path, "rb") as f:
+                add_resp = r.post(
+                    add_url,
+                    data=f,
+                    headers={"Content-Type": "text/turtle"},
+                    params=params,
+                    auth=auth,
+                    timeout=1800,
+                    verify=False,
+                )
+
+            if add_resp.status_code not in (200, 204):
+                # Rollback on error
+                r.post(f"{graphdb_url}/transaction/{transaction}/rollback", auth=auth, verify=False)
+                raise Exception(f"Stardog upload failed: {add_resp.status_code} {add_resp.text}")
+
+            # Commit transaction
+            commit_resp = r.post(f"{graphdb_url}/transaction/{transaction}/commit", auth=auth, verify=False)
+            commit_resp.raise_for_status()
+            print("Upload successful (Stardog)")
 
     @staticmethod
     def get_stardog_db_conn():
