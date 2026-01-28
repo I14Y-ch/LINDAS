@@ -125,8 +125,10 @@ class LindasAPIHelper:
             print(f"Started Stardog transaction: {transaction}")
 
             # Add file to transaction
-            add_url = f"{graphdb_url}/transaction/{transaction}/add"
+            add_url = f"{graphdb_url.rstrip("/")}/transaction/{transaction}/add"
             params = {"graph-uri": graph_uri}
+            print("Posting to URL:", f"{add_url}")
+            print("Target graph URI:", graph_uri)
             with open(file_path, "rb") as f:
                 add_resp = r.post(
                     add_url,
@@ -140,11 +142,11 @@ class LindasAPIHelper:
 
             if add_resp.status_code not in (200, 204):
                 # Rollback on error
-                r.post(f"{graphdb_url}/transaction/{transaction}/rollback", auth=auth, verify=False)
+                r.post(f"{graphdb_url.rstrip("/")}/transaction/{transaction}/rollback", auth=auth, verify=False)
                 raise Exception(f"Stardog upload failed: {add_resp.status_code} {add_resp.text}")
 
             # Commit transaction
-            commit_resp = r.post(f"{graphdb_url}/transaction/{transaction}/commit", auth=auth, verify=False)
+            commit_resp = r.post(f"{graphdb_url.rstrip("/")}/transaction/{transaction}/commit", auth=auth, verify=False)
             commit_resp.raise_for_status()
             print("Upload successful (Stardog)")
 
