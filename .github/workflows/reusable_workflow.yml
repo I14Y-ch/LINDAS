@@ -197,17 +197,11 @@ jobs:
             exit 0
           fi
           rapper -i turtle -c "$OUTPUT_FILE"
-      - name: Set unique artifact name
-        id: artifact_name
-        run: |
-          TIMESTAMP=$(date +%s)
-          ARTIFACT_NAME="batch-${{ matrix.batch_index }}-$TIMESTAMP-output"
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
       - name: Archive batch results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ steps.artifact_name.outputs.ARTIFACT_NAME }}
+          name: batch-${{ github.run_id }}-${{ matrix.statuses//,/ _ }}-${{ matrix.batch_index }}-output
           path: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
 
@@ -222,8 +216,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: batches
-          pattern: batch-*-output
-          merge-multiple: false
+          pattern: batch-${{ github.run_id }}-${{ matrix.statuses//,/ _ }}-*
+          merge-multiple: true
 
       - name: Detect if any TTL exists
         id: detect
@@ -259,8 +253,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: batches
-          pattern: batch-*-output
-          merge-multiple: false
+          pattern: batch-${{ github.run_id }}-${{ matrix.statuses//,/ _ }}-*
+          merge-multiple: true
 
       - name: List and validate batch files
         run: |
@@ -331,6 +325,10 @@ jobs:
           if failed_uploads > 0:
               exit(1)
           EOF
+      - name: Clean up batches
+        run: |
+          rm -rf batches/*
+          echo "All batch files removed after upload"
   final-summary:
     needs: [get-concepts, process-batches, clear-and-upload]
     runs-on: ubuntu-latest
