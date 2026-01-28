@@ -346,7 +346,7 @@ WHERE {{
 }}
 """
 
-        # LindasAPIHelper.graphdb_update(delete_query)
+        LindasAPIHelper.graphdb_update(delete_query)
 
 
 class I14YAPIHelper:
