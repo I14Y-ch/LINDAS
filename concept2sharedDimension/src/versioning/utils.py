@@ -1,4 +1,4 @@
-from time import time
+from time import time, sleep
 from urllib.parse import urlparse
 import requests as r
 from .config import *
@@ -385,7 +385,7 @@ class I14YAPIHelper:
                     except Exception as e:
                         if attempt == retries:
                             raise
-                        time.sleep(2)
+                        sleep(2)
 
                 data = response.json().get("data", [])
 
