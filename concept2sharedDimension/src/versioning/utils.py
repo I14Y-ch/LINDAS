@@ -135,7 +135,7 @@ class LindasAPIHelper:
             print(f"Started Stardog transaction: {transaction}")
 
             # URLs for add, commit, rollback
-            add_url = f"{server_root.rstrip('/')}/{database}/transaction/{transaction}/add"
+            add_url = f"{server_root.rstrip('/')}/{database}/{transaction}/add"
             rollback_url = f"{server_root.rstrip('/')}/{database}/transaction/rollback/{transaction}"
             commit_url = f"{server_root.rstrip('/')}/{database}/transaction/commit/{transaction}"
 
@@ -359,7 +359,7 @@ class I14YAPIHelper:
     local_identifier_concepts_map = {}
 
     @staticmethod
-    def get_all_concepts(registration_statuses=None, pageSize=100):
+    def get_all_concepts(registration_statuses=None, pageSize=50):
         """Get all CodeList concepts with specified registration statuses"""
         if not I14YAPIHelper.local_id_concepts_map:
 
