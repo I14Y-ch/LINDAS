@@ -323,9 +323,17 @@ class I14YAPIHelper:
             page = 1
             while True:
                 params = {"publicationLevel": "Public", "page": page, "pageSize": pageSize}
+                retries = 10
+                for attempt in range(1, retries + 1):
+                    try:
+                        response = r.get(base_url, params=params, verify=False)
+                        response.raise_for_status()
+                        break
+                    except Exception as e:
+                        if attempt == retries:
+                            raise
+                        time.sleep(2)
 
-                response = r.get(base_url, params=params, verify=False)
-                response.raise_for_status()
                 data = response.json().get("data", [])
 
                 if not data:
