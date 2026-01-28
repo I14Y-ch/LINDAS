@@ -197,11 +197,18 @@ jobs:
             exit 0
           fi
           rapper -i turtle -c "$OUTPUT_FILE"
+      - name: Sanitize statuses for filenames
+        id: sanitize
+        run: |
+          SAFE_STATUSES="${{ env.STATUSES }}" 
+          SAFE_STATUSES="${SAFE_STATUSES//,/ _}"
+          SAFE_STATUSES="${SAFE_STATUSES// /_}"
+          echo "safe_statuses=$SAFE_STATUSES" >> $GITHUB_OUTPUT
       - name: Archive batch results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: batch-${{ github.run_id }}-${{ matrix.statuses//,/ _ }}-${{ matrix.batch_index }}-output
+          name: batch-${{ github.run_id }}-${{ steps.sanitize.outputs.safe_statuses }}-${{ matrix.batch_index }}-output
           path: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
 
@@ -212,11 +219,18 @@ jobs:
       has_ttl: ${{ steps.detect.outputs.has_ttl }}
 
     steps:
+      - name: Sanitize statuses for filenames
+        id: sanitize
+        run: |
+          SAFE_STATUSES="${{ env.STATUSES }}"
+          SAFE_STATUSES="${SAFE_STATUSES//,/ _}"
+          SAFE_STATUSES="${SAFE_STATUSES// /_}"
+          echo "safe_statuses=$SAFE_STATUSES" >> $GITHUB_OUTPUT
       - name: Download all batch artifacts
         uses: actions/download-artifact@v4
         with:
           path: batches
-          pattern: batch-${{ github.run_id }}-${{ matrix.statuses//,/ _ }}-*
+          pattern: batch-${{ github.run_id }}-${{ steps.sanitize.outputs.safe_statuses }}-*
           merge-multiple: true
 
       - name: Detect if any TTL exists
@@ -249,11 +263,19 @@ jobs:
           sudo apt-get install -y raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Sanitize statuses for filenames
+        id: sanitize
+        run: |
+          SAFE_STATUSES="${{ env.STATUSES }}" 
+          SAFE_STATUSES="${SAFE_STATUSES//,/ _}"
+          SAFE_STATUSES="${SAFE_STATUSES// /_}"
+          echo "safe_statuses=$SAFE_STATUSES" >> $GITHUB_OUTPUT
       - name: Download all batch artifacts
         uses: actions/download-artifact@v4
         with:
           path: batches
-          pattern: batch-${{ github.run_id }}-${{ matrix.statuses//,/ _ }}-*
+          pattern: batch-${{ github.run_id }}-${{ steps.sanitize.outputs.safe_statuses }}-*
           merge-multiple: true
 
       - name: List and validate batch files
