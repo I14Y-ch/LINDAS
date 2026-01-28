@@ -52,7 +52,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      - name: Prepare batches folder
+        run: |
+          rm -rf batches/*
+          mkdir -p batches
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -218,16 +221,9 @@ jobs:
       - name: Download all batch artifacts
         uses: actions/download-artifact@v4
         with:
-          path: batches_temp
+          path: batches
           pattern: batch-*-output
           merge-multiple: false
-      - name: Move and overwrite batch files
-        run: |
-          mkdir -p batches
-          for file in batches_temp/*.ttl; do
-            echo "Moving $file to batches/ and overwriting if exists"
-            mv -f "$file" batches/
-          done
 
       - name: Detect if any TTL exists
         id: detect
