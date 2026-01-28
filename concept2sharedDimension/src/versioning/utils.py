@@ -107,17 +107,19 @@ class LindasAPIHelper:
                     timeout=1800,
                     verify=False,
                     params=params,
-                    proxies=PROXIES if DEBUG_LOCAL_TEST else None,
+                    # proxies=PROXIES if DEBUG_LOCAL_TEST else None,
                 )
 
             if response.status_code == 204:
                 print("Upload successful (GraphDB)")
             else:
-                raise Exception(f"GraphDB upload failed: {response.status_code} {response.text}")
+                raise Exception(
+                    f"GraphDB upload failed: {response.status_code} {response.text}\n"
+                    f"URL: {response.url}\nParams: {params}"
+                )
 
         # --- Stardog case ---
         else:
-            # Extract server root and database name
             parsed = urlparse(graphdb_url)
             path_parts = parsed.path.strip("/").split("/")
             if len(path_parts) == 0:
@@ -132,34 +134,47 @@ class LindasAPIHelper:
             transaction = tx_resp.text.strip('"')
             print(f"Started Stardog transaction: {transaction}")
 
-            # Add file to transaction
-            add_url = f"{server_root.rstrip('/')}/{transaction}/add"
+            # URLs for add, commit, rollback
+            add_url = f"{server_root.rstrip('/')}/{database}/transaction/{transaction}/add"
+            rollback_url = f"{server_root.rstrip('/')}/{database}/transaction/rollback/{transaction}"
+            commit_url = f"{server_root.rstrip('/')}/{database}/transaction/commit/{transaction}"
+
             params = {"graph-uri": graph_uri or database}
             print("Posting to URL:", add_url)
             print("Target graph URI:", params["graph-uri"])
 
-            with open(file_path, "rb") as f:
-                add_resp = r.post(
-                    add_url,
-                    data=f,
-                    headers={"Content-Type": "text/turtle"},
-                    params=params,
-                    auth=auth,
-                    timeout=1800,
-                    verify=False,
-                )
+            try:
+                with open(file_path, "rb") as f:
+                    add_resp = r.post(
+                        add_url,
+                        data=f,
+                        headers={"Content-Type": "text/turtle"},
+                        params=params,
+                        auth=auth,
+                        timeout=1800,
+                        verify=False,
+                    )
 
-            if add_resp.status_code not in (200, 204):
-                # Rollback on error
-                r.post(f"{server_root.rstrip('/')}/transaction/rollback/{transaction}", auth=auth, verify=False)
-                raise Exception(f"Stardog upload failed: {add_resp.status_code} {add_resp.text}")
+                if add_resp.status_code not in (200, 204):
+                    # Rollback on error
+                    r.post(rollback_url, auth=auth, verify=False)
+                    raise Exception(
+                        f"Stardog upload failed: {add_resp.status_code} {add_resp.text}\n"
+                        f"URL: {add_url}\nParams: {params}"
+                    )
 
-            # Commit transaction
-            commit_resp = r.post(
-                f"{server_root.rstrip('/')}/transaction/commit/{transaction}", auth=auth, verify=False
-            )
-            commit_resp.raise_for_status()
-            print("Upload successful (Stardog)")
+                # Commit transaction
+                commit_resp = r.post(commit_url, auth=auth, verify=False)
+                commit_resp.raise_for_status()
+                print("Upload successful (Stardog)")
+
+            except Exception as e:
+                # Ensure rollback in case of any exception
+                try:
+                    r.post(rollback_url, auth=auth, verify=False)
+                except Exception:
+                    pass  # ignore rollback errors
+                raise e
 
     @staticmethod
     def get_stardog_db_conn():
