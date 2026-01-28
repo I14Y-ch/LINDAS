@@ -465,10 +465,20 @@ class I14YAPIHelper:
         ):
             print(f"DEBUG: get_concept_data /codelist-entries/exports/Json API call for concept_id: {concept_id}")
             entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/Json"
-            entries_response = r.get(entries_url, verify=False)
-            entries_response.raise_for_status()
-            concept_data["codeListEntries"] = entries_response.json()["data"]
-            I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
+
+            retries = 10
+
+            for attempt in range(1, retries + 1):
+                try:
+                    entries_response = r.get(entries_url, verify=False)
+                    entries_response.raise_for_status()
+                    concept_data["codeListEntries"] = entries_response.json()["data"]
+                    I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
+                    break
+                except Exception:
+                    if attempt == retries:
+                        raise
+                    sleep(2)
 
         # Return in legacy format
         return {"data": I14YAPIHelper.local_id_concepts_map[concept_id]}
