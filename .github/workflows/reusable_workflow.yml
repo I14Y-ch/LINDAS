@@ -194,11 +194,17 @@ jobs:
             exit 0
           fi
           rapper -i turtle -c "$OUTPUT_FILE"
+      - name: Set unique artifact name
+        id: artifact_name
+        run: |
+          TIMESTAMP=$(date +%s)
+          ARTIFACT_NAME="batch-${{ matrix.batch_index }}-$TIMESTAMP-output"
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
       - name: Archive batch results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: batch-${{ matrix.batch_index }}-$(date +%s)-output
+          name: ${{ steps.artifact_name.outputs.ARTIFACT_NAME }}
           path: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
       - name: Remove local batch file
