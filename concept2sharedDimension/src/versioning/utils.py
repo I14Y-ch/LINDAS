@@ -126,7 +126,7 @@ class LindasAPIHelper:
             server_root = parsed._replace(path="/" + "/".join(path_parts[:-1])).geturl()
 
             # Begin transaction
-            tx_url = server_root.rstrip("/") + "/transaction/begin"
+            tx_url = f"{server_root.rstrip('/')}/{database}/transaction/begin"
             tx_resp = r.post(tx_url, auth=auth, verify=False)
             tx_resp.raise_for_status()
             transaction = tx_resp.text.strip('"')
