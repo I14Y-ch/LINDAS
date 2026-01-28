@@ -198,7 +198,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: batch-${{ matrix.batch_index }}-${{ github.run_id }}-output
+          name: batch-${{ matrix.batch_index }}-${{ github.run_id }}-${{ github.run_attempt }}-output
           path: batch_${{ matrix.batch_index }}_${{ needs.get-concepts.outputs.output_file }}
           if-no-files-found: warn
       - name: Remove local batch file
