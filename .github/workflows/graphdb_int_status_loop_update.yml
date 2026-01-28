@@ -9,7 +9,6 @@ jobs:
       max-parallel: 1
       matrix:
         statuses:
-          - "Qualified,Standard,PreferredStandard,Retired,Candidate"
           - "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded"
           - "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded"
 
