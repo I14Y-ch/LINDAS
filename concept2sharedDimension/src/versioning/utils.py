@@ -4,7 +4,9 @@ import requests as r
 from .config import *
 import warnings
 from urllib3.exceptions import InsecureRequestWarning
+
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+
 
 def timer(func):
     """Decorator that shows the execution time of the function object passed"""
@@ -18,6 +20,7 @@ def timer(func):
 
     return wrap_func
 
+
 def delete_orphaned_concepts_lindas():
     lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
 
@@ -27,6 +30,7 @@ def delete_orphaned_concepts_lindas():
 
     for concept_identifier in concepts_to_delete_identifiers:
         LindasAPIHelper.delete_concept(concept_identifier)
+
 
 class LindasAPIHelper:
 
@@ -76,7 +80,7 @@ class LindasAPIHelper:
         resp.raise_for_status()
 
     @staticmethod
-    def graphdb_upload_ttl(file_path,graph_uri):
+    def graphdb_upload_ttl(file_path, graph_uri):
         print(f"Uploading {file_path}")
         graphdb_url = os.environ.get("LINDAS_UPDATE_URL", "")
         graphdb_user = os.environ.get("STARDOG_USER", "")
@@ -89,9 +93,7 @@ class LindasAPIHelper:
             "Content-Type": "text/turtle",
         }
 
-        params = {
-            "context": f"<{graph_uri}>"
-        }
+        params = {"context": f"<{graph_uri}>"}
 
         auth = None
         if graphdb_user and graphdb_password:
@@ -111,14 +113,8 @@ class LindasAPIHelper:
                 )
             else:
                 response = r.post(
-                    graphdb_url,
-                    data=f,
-                    timeout=1800,
-                    headers=headers,
-                    verify=False,
-                    params=params,
-                    auth=auth
-            )
+                    graphdb_url, data=f, timeout=1800, headers=headers, verify=False, params=params, auth=auth
+                )
 
         if response.status_code == 204:
             print("Upload successful")
@@ -127,9 +123,9 @@ class LindasAPIHelper:
 
     @staticmethod
     def get_stardog_db_conn():
-        stardog_url = os.environ.get("LINDAS_UPDATE_URL","")
-        stardog_user = os.environ.get("STARDOG_USER","")
-        stardog_password = os.environ.get("STARDOG_PASSWORD","")
+        stardog_url = os.environ.get("LINDAS_UPDATE_URL", "")
+        stardog_user = os.environ.get("STARDOG_USER", "")
+        stardog_password = os.environ.get("STARDOG_PASSWORD", "")
 
         # Extract database from URL
         parsed = urlparse(stardog_url)
@@ -164,7 +160,7 @@ class LindasAPIHelper:
         headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
 
         if DEBUG_LOCAL_TEST:
-            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False,proxies=PROXIES)
+            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False, proxies=PROXIES)
         else:
             resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
         resp.raise_for_status()
@@ -295,7 +291,8 @@ WHERE {{
 }}
 """
 
-        LindasAPIHelper.graphdb_update(delete_query)
+        # LindasAPIHelper.graphdb_update(delete_query)
+
 
 class I14YAPIHelper:
 
@@ -315,7 +312,7 @@ class I14YAPIHelper:
 
             base_url = f"{BASE_API_URL}"
             all_concepts = []
-            printed_count = 0  
+            printed_count = 0
             failed_concepts = []
 
             if registration_statuses is None:
@@ -327,7 +324,7 @@ class I14YAPIHelper:
 
                 response = r.get(base_url, params=params, verify=False)
                 response.raise_for_status()
-                data = response.json().get('data', [])
+                data = response.json().get("data", [])
 
                 if not data:
                     break
@@ -355,7 +352,7 @@ class I14YAPIHelper:
                     print(f"   Version: {concept.get('version')}\n")
 
                 all_concepts.extend(filtered)
-                printed_count = len(all_concepts)  
+                printed_count = len(all_concepts)
 
                 if len(data) < pageSize:
                     break
@@ -364,7 +361,9 @@ class I14YAPIHelper:
 
             # Give warning if any concepts failed during processing
             if failed_concepts:
-                print(f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}")
+                print(
+                    f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}"
+                )
 
             # We get only the latest concept version from i14y because we will get all the versions for each concept afterwards anyway
             latest_concepts = {}
@@ -392,7 +391,7 @@ class I14YAPIHelper:
             meta_url = f"{BASE_API_URL}{concept_id}"
             meta_response = r.get(meta_url, verify=False)
             meta_response.raise_for_status()
-            concept_data = meta_response.json()['data']
+            concept_data = meta_response.json()["data"]
 
             I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
 
@@ -405,11 +404,11 @@ class I14YAPIHelper:
             entries_url = f"{BASE_API_URL}{concept_id}/codelist-entries/exports/Json"
             entries_response = r.get(entries_url, verify=False)
             entries_response.raise_for_status()
-            concept_data['codeListEntries'] = entries_response.json()['data']
+            concept_data["codeListEntries"] = entries_response.json()["data"]
             I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
 
         # Return in legacy format
-        return {'data': I14YAPIHelper.local_id_concepts_map[concept_id]}
+        return {"data": I14YAPIHelper.local_id_concepts_map[concept_id]}
 
     @staticmethod
     def get_i14y_code_versions(concept_identifier):
@@ -437,16 +436,16 @@ class I14YAPIHelper:
 
                 while True:
                     params = {
-                        'conceptIdentifier': concept_identifier,
-                        'publicationLevel': 'Public',
-                        'page': page,
-                        'pageSize': page_size
+                        "conceptIdentifier": concept_identifier,
+                        "publicationLevel": "Public",
+                        "page": page,
+                        "pageSize": page_size,
                     }
 
                     response = r.get(url, params=params, verify=False)
                     response.raise_for_status()
 
-                    data = response.json().get('data', [])
+                    data = response.json().get("data", [])
 
                     # Stop when no more items
                     if not data:
@@ -470,29 +469,33 @@ class I14YAPIHelper:
         concepts = I14YAPIHelper.local_identifier_concepts_map[concept_identifier]
         versions = []
         for concept in concepts:
-            versions.append({
-                'id': concept.get('id'),
-                'version': concept.get('version'),
-                'validFrom': concept.get('validFrom'),
-                'registrationStatus': concept.get('registrationStatus')
-            })
+            versions.append(
+                {
+                    "id": concept.get("id"),
+                    "version": concept.get("version"),
+                    "validFrom": concept.get("validFrom"),
+                    "registrationStatus": concept.get("registrationStatus"),
+                }
+            )
 
         # We sort on validFrom date, if 2 elements have the same date we sort by version number
-        sorted_versions = sorted(versions, key=lambda x: (x['validFrom'], x['version']))
+        sorted_versions = sorted(versions, key=lambda x: (x["validFrom"], x["version"]))
 
         version_data = []
         failed_concepts = []
 
         for version in sorted_versions:
-            data = I14YAPIHelper.get_concept_data(version['id'])
+            data = I14YAPIHelper.get_concept_data(version["id"])
             if data is not None:
                 version_data.append(data["data"])
             else:
-                failed_concepts.append(version['id'])
+                failed_concepts.append(version["id"])
 
         # Give warning if any concepts failed to retrieve
         if failed_concepts:
-            print(f"Warning: {len(failed_concepts)} concept version(s) could not be retrieved: {', '.join(failed_concepts)}")
+            print(
+                f"Warning: {len(failed_concepts)} concept version(s) could not be retrieved: {', '.join(failed_concepts)}"
+            )
 
         return version_data
 
@@ -504,6 +507,7 @@ def is_valid_value(value):
     clean_value = str(value).strip().upper()
     return clean_value and clean_value not in {"NA", "N/A", "-", "NULL", "NONE"}
 
+
 class VersionDiff:
     @staticmethod
     def find_deleted_entries(old_version_data, new_version_data):
@@ -511,8 +515,8 @@ class VersionDiff:
         Compare two versions and find entries present in old_version but missing in new_version
         Returns list of deleted entry codes
         """
-        old_entries = {e['code'] for e in old_version_data.get('codeListEntries', [])}
-        new_entries = {e['code'] for e in new_version_data.get('codeListEntries', [])}
+        old_entries = {e["code"] for e in old_version_data.get("codeListEntries", [])}
+        new_entries = {e["code"] for e in new_version_data.get("codeListEntries", [])}
         return list(old_entries - new_entries)
 
     # @staticmethod
@@ -523,7 +527,7 @@ class VersionDiff:
     #     """
     #     modified = {}
     #     new_entries = {e['code']: e for e in new_version_data.get('codeListEntries', [])}
-        
+
     #     for old_entry in old_version_data.get('codeListEntries', []):
     #         code = old_entry['code']
     #         if code in new_entries:
@@ -552,11 +556,11 @@ class VersionDiff:
     #         return True
     #     if old_entry.get('code') != new_entry.get('code'):
     #         return True
-            
+
     #     # Compare annotations if they exist
     #     if old_entry.get('annotations') != new_entry.get('annotations'):
     #         return True
-            
+
     #     return False
 
     # @staticmethod
@@ -567,13 +571,13 @@ class VersionDiff:
     #     """
     #     unchanged = {}
     #     old_entries = {e['code']: e for e in old_version_data.get('codeListEntries', [])}
-        
+
     #     for new_entry in new_version_data.get('codeListEntries', []):
     #         code = new_entry['code']
     #         if code in old_entries and not VersionDiff.has_changes(old_entries[code], new_entry):
     #             unchanged[code] = old_entries[code]
     #     return unchanged
-    
+
     # @staticmethod
     # def is_newer_version(current_version, existing_version):
     #     """Compare version strings to determine which is newer"""

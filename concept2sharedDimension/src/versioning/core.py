@@ -9,6 +9,7 @@ from rdflib import URIRef, BNode, Literal
 from rdflib.namespace import RDF
 import hashlib
 
+
 class StreamingTurtleWriter:
     """
     Streaming Turtle writer with:
@@ -40,7 +41,7 @@ class StreamingTurtleWriter:
         self.current_concept_version = "1.0.0"
         self.is_version = False
 
-        self.skolem_map = {}               # BNode -> IRIRef
+        self.skolem_map = {}  # BNode -> IRIRef
         self.bnode_triples = defaultdict(list)  # BNode -> list of triples defining structure
 
     def bind(self, prefix, uri):
@@ -52,7 +53,7 @@ class StreamingTurtleWriter:
         self.current_concept_identifier = identifier
         self.current_concept_version = version
 
-    def set_is_version(self,is_version):
+    def set_is_version(self, is_version):
         self.is_version = is_version
 
     def _canonical_hash_for_bnode(self, node):
@@ -64,7 +65,7 @@ class StreamingTurtleWriter:
         if not self.is_version:
             # Useful to distinguish in some cases 2 BNodes
             parts.append("identity")
-        for (s, p, o) in triples:
+        for s, p, o in triples:
             p_str = str(p)
 
             if isinstance(o, URIRef):
@@ -72,7 +73,7 @@ class StreamingTurtleWriter:
             elif isinstance(o, Literal):
                 o_str = f"L_o:{o}"
             elif isinstance(o, BNode):
-                o_str = "B_o:?"       # do NOT recurse!
+                o_str = "B_o:?"  # do NOT recurse!
             else:
                 o_str = f"O:{o}"
 
@@ -81,7 +82,7 @@ class StreamingTurtleWriter:
             elif isinstance(s, Literal):
                 s_str = f"L_s:{s}"
             elif isinstance(s, BNode):
-                s_str = "B_s:?"       # do NOT recurse!
+                s_str = "B_s:?"  # do NOT recurse!
             else:
                 s_str = f"S:{s}"
 
@@ -129,11 +130,7 @@ class StreamingTurtleWriter:
         self.seen_hashes.add(h)
 
         # Write triple
-        self.f.write(
-            f"{self._format_node(s)} "
-            f"{self._format_node(p)} "
-            f"{self._format_node(o)} .\n"
-        )
+        self.f.write(f"{self._format_node(s)} " f"{self._format_node(p)} " f"{self._format_node(o)} .\n")
 
         # Track types
         if p == RDF.type:
@@ -142,10 +139,7 @@ class StreamingTurtleWriter:
     def _triple_hash(self, triple):
         s, p, o = triple
         return hashlib.sha256(
-            f"{self._format_node(s)} "
-            f"{self._format_node(p)} "
-            f"{self._format_node(o)}"
-            .encode("utf-8")
+            f"{self._format_node(s)} " f"{self._format_node(p)} " f"{self._format_node(o)}".encode("utf-8")
         ).hexdigest()
 
     def _format_node(self, node):
@@ -162,19 +156,15 @@ class StreamingTurtleWriter:
         if isinstance(node, Literal):
             return self._format_literal(node)
 
-        return f"\"{str(node)}\""
+        return f'"{str(node)}"'
 
     def _format_literal(self, lit: Literal):
         """EXACT rdflib-compatible escaping."""
         val = str(lit).replace("\r\n", "\n").replace("\r", "\n")
 
-        escaped = (
-            val.replace("\\", "\\\\")
-               .replace('"', '\\"')
-               .replace("\n", "\\n")
-        )
+        escaped = val.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
-        lit_str = f"\"{escaped}\""
+        lit_str = f'"{escaped}"'
 
         if lit.language:
             return f"{lit_str}@{lit.language}"
@@ -204,6 +194,7 @@ class StreamingTurtleWriter:
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
+
 class GraphManager:
     def __init__(self, base_uri, output_file=OUTPUT_FILE_NAME):
         self.base_uri = base_uri
@@ -211,10 +202,10 @@ class GraphManager:
 
         self._bind_namespaces()
 
-    def set_current_identifier_version(self,identifier,version):
-        self.graph.set_current_identifier_version(identifier,version)
+    def set_current_identifier_version(self, identifier, version):
+        self.graph.set_current_identifier_version(identifier, version)
 
-    def set_is_version(self,is_version):
+    def set_is_version(self, is_version):
         self.graph.set_is_version(is_version)
 
     def _bind_namespaces(self):
@@ -252,10 +243,11 @@ class GraphManager:
         """Close the underlying writer"""
         self.graph.close()
 
+
 class CatalogManager:
     def __init__(self, graph_manager):
         self.vm = graph_manager
-    
+
     def create_catalog_description(self):
         """Create metadata for the i14y catalog"""
         catalog_uri = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y")
@@ -264,39 +256,80 @@ class CatalogManager:
         self.vm.graph.add((catalog_uri, RDF.type, SDO.DataCatalog))
         # self.vm.graph.add((catalog_uri, RDF.type, VOID.DatasetDescription))
         self.vm.graph.add((catalog_uri, RDFA.uri, URIRef("https://register.ld.admin.ch/i14y/")))
-        #self.vm.graph.add((catalog_uri, SDO.includedInDataCatalog, void_uri)) not used in LINDAS at the moment
+        # self.vm.graph.add((catalog_uri, SDO.includedInDataCatalog, void_uri)) not used in LINDAS at the moment
 
         # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
         self.vm.graph.add((catalog_uri, SDO.name, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
         # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("This catalog contains data from I14Y. Specifically, it contains I14Y concepts made available as linked data.", lang="en")))
-        self.vm.graph.add((catalog_uri, SDO.description, Literal("This catalog contains data from I14Y. Specifically, it contains I14Y concepts made available as linked data.", lang="en")))
+        self.vm.graph.add(
+            (
+                catalog_uri,
+                SDO.description,
+                Literal(
+                    "This catalog contains data from I14Y. Specifically, it contains I14Y concepts made available as linked data.",
+                    lang="en",
+                ),
+            )
+        )
 
         # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr")))
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr")))
-        self.vm.graph.add((catalog_uri, SDO.name, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr")))
+        self.vm.graph.add(
+            (catalog_uri, SDO.name, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr"))
+        )
         # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Ce catalogue contient des données d'I14Y. Plus précisément, il contient des concepts I14Y mis à disposition sous forme de données liées.", lang="fr")))
-        self.vm.graph.add((catalog_uri, SDO.description, Literal("Ce catalogue contient des données d'I14Y. Plus précisément, il contient des concepts I14Y mis à disposition sous forme de données liées.", lang="fr")))
+        self.vm.graph.add(
+            (
+                catalog_uri,
+                SDO.description,
+                Literal(
+                    "Ce catalogue contient des données d'I14Y. Plus précisément, il contient des concepts I14Y mis à disposition sous forme de données liées.",
+                    lang="fr",
+                ),
+            )
+        )
 
         # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
         self.vm.graph.add((catalog_uri, SDO.name, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
         # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Questo catalogo contiene dati da I14Y. Specificamente, contiene concetti I14Y resi disponibili come linked data.", lang="it")))
-        self.vm.graph.add((catalog_uri, SDO.description, Literal("Questo catalogo contiene dati da I14Y. Specificamente, contiene concetti I14Y resi disponibili come linked data.", lang="it")))
+        self.vm.graph.add(
+            (
+                catalog_uri,
+                SDO.description,
+                Literal(
+                    "Questo catalogo contiene dati da I14Y. Specificamente, contiene concetti I14Y resi disponibili come linked data.",
+                    lang="it",
+                ),
+            )
+        )
 
         # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de")))
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de")))
-        self.vm.graph.add((catalog_uri, SDO.name, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de")))
+        self.vm.graph.add(
+            (catalog_uri, SDO.name, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de"))
+        )
         # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Dieser Katalog enthält Daten von I14Y. Insbesondere enthält er I14Y-Konzepte, die als Linked Data verfügbar gemacht wurden.", lang="de")))
-        self.vm.graph.add((catalog_uri, SDO.description, Literal("Dieser Katalog enthält Daten von I14Y. Insbesondere enthält er I14Y-Konzepte, die als Linked Data verfügbar gemacht wurden.", lang="de")))
+        self.vm.graph.add(
+            (
+                catalog_uri,
+                SDO.description,
+                Literal(
+                    "Dieser Katalog enthält Daten von I14Y. Insbesondere enthält er I14Y-Konzepte, die als Linked Data verfügbar gemacht wurden.",
+                    lang="de",
+                ),
+            )
+        )
 
         return catalog_uri
+
 
 class CodeListManager:
     def __init__(self, version_manager):
         self.vm = version_manager
         self.level_depths = {}
-        self.levels_dict = {}  
+        self.levels_dict = {}
         self.levels_info_all = []
 
     def add_versioning_relationships(self, version_uri, identity_uri):
@@ -308,24 +341,16 @@ class CodeListManager:
         """Mark an identity/version as deprecated"""
         self.vm.graph.add((identity_uri, RDF.type, vl.Deprecated))
         if valid_to:
-            self.vm.graph.add((
-                identity_uri, 
-                SDO.validUntil, 
-                Literal(valid_to, datatype=XSD.date)
-            ))
+            self.vm.graph.add((identity_uri, SDO.validUntil, Literal(valid_to, datatype=XSD.date)))
 
     def _calculate_depth(self, entry, concept_data):
         """Calculate depth level based on parentCode relationships."""
-        if 'parentCode' not in entry:
+        if "parentCode" not in entry:
             return 1
-        parent_code = entry['parentCode']
+        parent_code = entry["parentCode"]
         if parent_code in self.level_depths:
             return self.level_depths[parent_code] + 1
-        parent_entry = next(
-            (item for item in concept_data['codeListEntries'] 
-            if item['code'] == parent_code), 
-            None
-        )
+        parent_entry = next((item for item in concept_data["codeListEntries"] if item["code"] == parent_code), None)
         return 1 + (self._calculate_depth(parent_entry, concept_data) if parent_entry else 0)
 
     # def _create_all_level(self, ontology_uri, concept_data, is_version):
@@ -345,8 +370,8 @@ class CodeListManager:
     #     self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
 
     #     hierarchy_name = (
-    #         f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}" 
-    #         if is_version else 
+    #         f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}"
+    #         if is_version else
     #         f"Identity Hierarchy - {concept_data['identifier']}"
     #     )
 
@@ -371,37 +396,36 @@ class CodeListManager:
         """Process entry with version-identity handling and level management"""
         self.vm.set_is_version(is_version)
         if is_version:
-            entry_uri = self.vm.create_uri(concept_data['identifier'], entry['code'], concept_data['version'])
+            entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"], concept_data["version"])
 
-            identity_uri = self.vm.create_uri(concept_data['identifier'], entry['code'])
+            identity_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
             # self.vm.graph.add((entry_uri, vl.identity, identity_uri))
             # self.vm.graph.add((identity_uri, vl.version, entry_uri))
         else:
-            entry_uri = self.vm.create_uri(concept_data['identifier'], entry['code'])
+            entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
 
-
-        if (not is_version) and hasattr(self.vm, 'deleted_entries') and entry['code'] in self.vm.deleted_entries:
+        if (not is_version) and hasattr(self.vm, "deleted_entries") and entry["code"] in self.vm.deleted_entries:
             return
 
         level_depth = self._calculate_depth(entry, concept_data)
-        self.level_depths[entry['code']] = level_depth
+        self.level_depths[entry["code"]] = level_depth
 
         if is_version:
-            level_uri = self.vm.create_uri(concept_data['identifier'], f'level_{level_depth}', concept_data['version'] )
+            level_uri = self.vm.create_uri(concept_data["identifier"], f"level_{level_depth}", concept_data["version"])
         else:
-            level_uri = self.vm.create_uri( concept_data['identifier'],  f'level_{level_depth}')
+            level_uri = self.vm.create_uri(concept_data["identifier"], f"level_{level_depth}")
 
         self.levels_dict.setdefault(level_depth, []).append(entry)
 
         level_title = {
-            'en': f"Level {level_depth}",
-            'it': f"Livello {level_depth}",
-            'de': f"Ebene {level_depth}",
-            'fr': f"Niveau {level_depth}"
+            "en": f"Level {level_depth}",
+            "it": f"Livello {level_depth}",
+            "de": f"Ebene {level_depth}",
+            "fr": f"Niveau {level_depth}",
         }
 
-        if 'annotations' in entry:
-            self.add_annotations(entry_uri, entry['annotations'])
+        if "annotations" in entry:
+            self.add_annotations(entry_uri, entry["annotations"])
         # in some cases it is used text (multilingual string) in other title (not multilingual)
         # Commented as generates issue with HIER_LEVEL
         # for annotation in entry.get('annotations', []):
@@ -419,12 +443,8 @@ class CodeListManager:
 
         #             level_title = {lang: annotation['title'] for lang in level_title}
 
-        if not any(level['uri'] == level_uri for level in self.levels_info_all):
-            self.levels_info_all.append({
-                'uri': level_uri, 
-                'title': level_title, 
-                'depth': level_depth
-            })
+        if not any(level["uri"] == level_uri for level in self.levels_info_all):
+            self.levels_info_all.append({"uri": level_uri, "title": level_title, "depth": level_depth})
             self._process_level_metadata(level_uri, level_title, level_depth, ontology_uri)
 
         # self.vm.graph.add((entry_uri, XKOS.belongsTo, level_uri))
@@ -435,7 +455,7 @@ class CodeListManager:
 
         self._add_entry_metadata(entry_uri, entry, ontology_uri, all_uri, is_version)
 
-        if 'parentCode' in entry:
+        if "parentCode" in entry:
             self._handle_parent_relationship(entry, concept_data, entry_uri, is_version)
         else:
             # If no parent, link to the all_uri as top concept
@@ -445,17 +465,17 @@ class CodeListManager:
             self.vm.graph.add((entry_uri, SDO.isPartOf, all_uri))
             self.vm.graph.add((all_uri, SDO.hasPart, entry_uri))
 
-        if 'codeListEntryValueMaxLength' in concept_data or 'codeListEntryValueType' in concept_data:
+        if "codeListEntryValueMaxLength" in concept_data or "codeListEntryValueType" in concept_data:
             constraint_bnode = BNode()
             self.vm.graph.add((entry_uri, SHACL.property, constraint_bnode))
             self.vm.graph.add((constraint_bnode, SHACL.path, SKOS.notation))
 
-            if 'codeListEntryValueType' in concept_data:
-                value_type = concept_data['codeListEntryValueType']
+            if "codeListEntryValueType" in concept_data:
+                value_type = concept_data["codeListEntryValueType"]
                 if value_type == "String":
                     self.vm.graph.add((constraint_bnode, SHACL.datatype, XSD.string))
                 elif value_type == "Number":
-                    self.vm.graph.add((constraint_bnode, SHACL.datatype, XSD.decimal)) 
+                    self.vm.graph.add((constraint_bnode, SHACL.datatype, XSD.decimal))
 
             # if 'codeListEntryValueMaxLength' in concept_data:
             #     max_len = int(concept_data['codeListEntryValueMaxLength'])
@@ -473,13 +493,13 @@ class CodeListManager:
         self.vm.graph.add((all_uri, SDO.member, entry_uri))
         # self.vm.graph.add((all_uri, SKOS.member, entry_uri))
 
-        for lang, name in entry['name'].items():
+        for lang, name in entry["name"].items():
             if is_valid_value(name):
                 # self.vm.graph.add((entry_uri, SKOS.prefLabel, Literal(name, lang=lang)))
                 self.vm.graph.add((entry_uri, SDO.name, Literal(name, lang=lang)))
                 # self.vm.graph.add((entry_uri, DCTERMS.title, Literal(name, lang=lang)))
 
-        self.vm.graph.add((entry_uri, SDO.identifier, Literal(entry['code'])))
+        self.vm.graph.add((entry_uri, SDO.identifier, Literal(entry["code"])))
         # self.vm.graph.add((entry_uri, SKOS.notation, Literal(entry['code'])))
         # self.vm.graph.add((entry_uri, DCTERMS.identifier, Literal(entry['code'])))
         # self.vm.graph.add((entry_uri, SDO.termCode, Literal(entry['code'])))
@@ -493,9 +513,9 @@ class CodeListManager:
     def _handle_parent_relationship(self, entry, concept_data, entry_uri, is_version):
         """Handle parent-child relationships between entries"""
         if is_version:
-            parent_uri = self.vm.create_uri(concept_data['identifier'], entry['parentCode'],  concept_data['version'])
+            parent_uri = self.vm.create_uri(concept_data["identifier"], entry["parentCode"], concept_data["version"])
         else:
-            parent_uri = self.vm.create_uri(concept_data['identifier'],  entry['parentCode'])
+            parent_uri = self.vm.create_uri(concept_data["identifier"], entry["parentCode"])
 
         relationships = [
             # (entry_uri, SKOS.broader, parent_uri),
@@ -515,13 +535,13 @@ class CodeListManager:
             "INCLUDES": XKOS.coreContentNote,
             "INCLUDES_ALSO": XKOS.additionalContentNote,
             "EXCLUDES": XKOS.exclusionNote,
-            "SCOPE_NOTE": XKOS.scopeNote, 
-            "VALID_FROM": SDO.validFrom 
+            "SCOPE_NOTE": XKOS.scopeNote,
+            "VALID_FROM": SDO.validFrom,
         }
 
         for annotation in annotations:
-            annotation_type = annotation.get('type')
-            text_data = annotation.get('text', {})
+            annotation_type = annotation.get("type")
+            text_data = annotation.get("text", {})
 
             # Skip HIER_LEVEL annotations as they're handled in _process_entry
             # if annotation_type == 'HIER_LEVEL':
@@ -532,8 +552,7 @@ class CodeListManager:
                 for lang, text in text_data.items():
                     if is_valid_value(text):
                         self.vm.graph.add(
-                            (concept_uri, annotation_predicates[annotation_type], 
-                            Literal(text, lang=lang))
+                            (concept_uri, annotation_predicates[annotation_type], Literal(text, lang=lang))
                         )
                 continue  # Skip the rest of the loop for these annotation types
 
@@ -553,7 +572,9 @@ class CodeListManager:
                 if is_valid_value(text):
                     self.vm.graph.add((body_node, RDF.value, Literal(text.strip(), lang=lang)))
                     if not first_text_added:
-                        self.vm.graph.add((body_node, RDF.type, URIRef("http://www.w3.org/2011/content#ContentAsText")))
+                        self.vm.graph.add(
+                            (body_node, RDF.type, URIRef("http://www.w3.org/2011/content#ContentAsText"))
+                        )
                         self.vm.graph.add((body_node, DCTERMS.format, Literal("text/plain")))
                         first_text_added = True
 
@@ -565,7 +586,7 @@ class CodeListManager:
                 self.vm.graph.add((body_node, SDO.name, Literal(title)))
 
             # Add identifier if present
-            if annotation.get("identifier"): 
+            if annotation.get("identifier"):
                 # self.vm.graph.add((body_node, DCTERMS.identifier, Literal(annotation["identifier"])))
                 self.vm.graph.add((body_node, SDO.identifier, Literal(annotation["identifier"])))
 
@@ -576,8 +597,9 @@ class CodeListManager:
             # Add URI if present
             if annotation.get("uri"):
                 annotation_uri = annotation["uri"].strip()
-                if annotation_uri:  
+                if annotation_uri:
                     self.vm.graph.add((body_node, oa.hasTarget, URIRef(annotation_uri)))
+
 
 class ConceptMetadataManager:
     def __init__(self, version_manager):
@@ -591,25 +613,25 @@ class ConceptMetadataManager:
 
         # self.vm.graph.add((uri, RDF.type, SKOS.ConceptScheme))
         self.vm.graph.add((uri, RDF.type, SDO.DefinedTermSet))
-        self.vm.graph.add((uri, RDF.type, CUBELINK.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
+        # self.vm.graph.add((uri, RDF.type, CUBELINK.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
         self.vm.graph.add((uri, RDF.type, vl.Version if is_version else vl.Identity))
 
-        self.vm.graph.add((uri, PAV.version, Literal(concept_data['version'])))
+        self.vm.graph.add((uri, PAV.version, Literal(concept_data["version"])))
 
         # SHACL property for cube creator
         shacl_property = BNode()
         self.vm.graph.add((uri, SHACL.property, shacl_property))
-        self.vm.graph.add((shacl_property, QUDT.scaleType, URIRef('http://qudt.org/schema/qudt/Nominal')))
+        self.vm.graph.add((shacl_property, QUDT.scaleType, URIRef("http://qudt.org/schema/qudt/Nominal")))
 
         # self.vm.graph.add((uri, DCTERMS.identifier, Literal(concept_data["identifier"])))
         self.vm.graph.add((uri, SDO.identifier, Literal(concept_data["identifier"])))
 
         self.vm.graph.add((uri, SDO.validFrom, Literal(concept_data["validFrom"], datatype=XSD.date)))
-        if 'validTo' in concept_data:
+        if "validTo" in concept_data:
             self.vm.graph.add((uri, SDO.validUntil, Literal(concept_data["validTo"], datatype=XSD.date)))
 
         for lang, publisher_name in concept_data["publisher"]["name"].items():
-            if  is_valid_value(publisher_name):
+            if is_valid_value(publisher_name):
                 self.vm.graph.add((uri, DCTERMS.publisher, Literal(publisher_name, lang=lang)))
 
         # added Version and identity to the name of the Concept to differentiate
@@ -619,13 +641,13 @@ class ConceptMetadataManager:
                 suffix = f" (version {concept_data['version']})" if is_version else " (identity)"
                 modified_names[lang] = f"{name}{suffix}"
                 for lang, name in modified_names.items():
-                    if name and str(name).strip(): 
+                    if name and str(name).strip():
                         # self.vm.graph.add((uri, SKOS.prefLabel, Literal(name, lang=lang)))
                         self.vm.graph.add((uri, SDO.name, Literal(name, lang=lang)))
                         # self.vm.graph.add((uri, DCTERMS.title, Literal(name, lang=lang)))
 
         for lang, desc in concept_data["description"].items():
-            if  is_valid_value(desc):
+            if is_valid_value(desc):
                 self.vm.graph.add((uri, SDO.description, Literal(desc, lang=lang)))
                 # self.vm.graph.add((uri, DCTERMS.description, Literal(desc, lang=lang)))
                 # self.vm.graph.add((uri, SKOS.definition, Literal(desc, lang=lang)))
@@ -633,7 +655,7 @@ class ConceptMetadataManager:
         if concept_data.get("keywords"):
             for keyword_dict in concept_data["keywords"]:
                 for lang, word in keyword_dict.items():
-                    if  is_valid_value(word):
+                    if is_valid_value(word):
                         self.vm.graph.add((uri, SDO.keywords, Literal(word, lang=lang)))
 
         if "registrationStatus" in concept_data:
@@ -645,10 +667,10 @@ class ConceptMetadataManager:
 
         if "themes" in concept_data:
             for theme in concept_data["themes"]:
-                self._add_theme(uri, theme, concept_data['id'])
+                self._add_theme(uri, theme, concept_data["id"])
 
-        if concept_data.get('conformsTo'):
-            for conformsTo_dict in concept_data['conformsTo']:
+        if concept_data.get("conformsTo"):
+            for conformsTo_dict in concept_data["conformsTo"]:
                 self._add_conforms_to(uri, conformsTo_dict)
 
         # connect Concept to I14Y catalog
@@ -666,7 +688,7 @@ class ConceptMetadataManager:
         self.vm.graph.add((theme_bnode, SDO.identifier, URIRef(theme_uri)))
 
         for lang, theme_name in theme["name"].items():
-            if  is_valid_value(theme_name):
+            if is_valid_value(theme_name):
                 # self.vm.graph.add((theme_bnode, SKOS.prefLabel, Literal(theme_name, lang=lang)))
                 self.vm.graph.add((theme_bnode, SDO.name, Literal(theme_name, lang=lang)))
 
@@ -675,21 +697,23 @@ class ConceptMetadataManager:
     def _add_conforms_to(self, concept_uri, conformsTo_dict):
         """Add conformsTo information to concept"""
         conformTo_bnode = BNode()
-        uri_ct = conformsTo_dict.get('uri')
+        uri_ct = conformsTo_dict.get("uri")
 
         if uri_ct:
             # self.vm.graph.add((conformTo_bnode, DCTERMS.identifier, URIRef(uri_ct)))
             self.vm.graph.add((conformTo_bnode, SDO.identifier, URIRef(uri_ct)))
 
-            if 'label' in conformsTo_dict:
+            if "label" in conformsTo_dict:
                 for lang, name in conformsTo_dict["label"].items():
-                    if  is_valid_value(name):
+                    if is_valid_value(name):
                         # self.vm.graph.add((conformTo_bnode, SKOS.prefLabel, Literal(name, lang=lang)))
                         self.vm.graph.add((conformTo_bnode, SDO.name, Literal(name, lang=lang)))
 
             self.vm.graph.add((concept_uri, DCTERMS.conformsTo, conformTo_bnode))
 
-    def add_concept_hierarchy(self, concept_uri, concept_data, is_version=False, level_depths=None, levels_dict=None, levels_info_all=None):
+    def add_concept_hierarchy(
+        self, concept_uri, concept_data, is_version=False, level_depths=None, levels_dict=None, levels_info_all=None
+    ):
         """Add hierarchy structure for the concept including XKOS levels"""
         # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
         self.vm.set_is_version(is_version)
@@ -700,12 +724,11 @@ class ConceptMetadataManager:
         if levels_info_all is None:
             levels_info_all = []
 
-
         # Create 'All' level
         if is_version:
-            all_uri = self.vm.create_uri(concept_data['identifier'], "all", concept_data['version'])
+            all_uri = self.vm.create_uri(concept_data["identifier"], "all", concept_data["version"])
         else:
-            all_uri = self.vm.create_uri(concept_data['identifier'], "all")
+            all_uri = self.vm.create_uri(concept_data["identifier"], "all")
 
         self.vm.graph.add((all_uri, RDF.type, XKOS.ClassificationLevel))
         self.vm.graph.add((all_uri, SDO.inDefinedTermSet, concept_uri))
@@ -717,9 +740,9 @@ class ConceptMetadataManager:
         self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
 
         hierarchy_name = (
-            f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}" 
-            if is_version else 
-            f"Identity Hierarchy - {concept_data['identifier']}"
+            f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}"
+            if is_version
+            else f"Identity Hierarchy - {concept_data['identifier']}"
         )
 
         self.vm.graph.add((hierarchy, SDO.name, Literal(hierarchy_name)))
@@ -727,17 +750,21 @@ class ConceptMetadataManager:
         self.vm.graph.add((hierarchy, CUBELINK.hierarchyRoot, all_uri))
 
         if level_depths:
-            self._add_xkos_level_information(concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data)
+            self._add_xkos_level_information(
+                concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data
+            )
 
         return all_uri
 
-    def _add_xkos_level_information(self, concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data):
+    def _add_xkos_level_information(
+        self, concept_uri, all_uri, level_depths, levels_dict, levels_info_all, is_version, concept_data
+    ):
         """Add XKOS level information to the concept scheme"""
         self.vm.set_is_version(is_version)
         max_level_depth = max(level_depths.values(), default=1)
         self.vm.graph.add((concept_uri, XKOS.numberOfLevels, Literal(max_level_depth, datatype=XSD.integer)))
 
-        sorted_levels = sorted(levels_info_all, key=lambda x: x['depth'])
+        sorted_levels = sorted(levels_info_all, key=lambda x: x["depth"])
         previous_level_uri = all_uri
 
         # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
@@ -748,10 +775,10 @@ class ConceptMetadataManager:
         self.vm.graph.add((concept_uri, SDO.hasPart, all_uri))
 
         for level in sorted_levels:
-            level_uri = URIRef(level['uri'])
+            level_uri = URIRef(level["uri"])
 
             # Only process levels that match current type (version or identity)
-            if is_version == ('version' in str(level_uri)):
+            if is_version == ("version" in str(level_uri)):
 
                 # self.vm.graph.add((concept_uri, XKOS.levels, level_uri))
                 # self.vm.graph.add((concept_uri, XKOS.hasPart, level_uri))
@@ -759,30 +786,31 @@ class ConceptMetadataManager:
                 self.vm.graph.add((concept_uri, SDO.hasPart, level_uri))
 
                 self.vm.graph.add((level_uri, RDF.type, XKOS.ClassificationLevel))
-                self.vm.graph.add((level_uri, XKOS.depth, Literal(level['depth'], datatype=XSD.integer)))
+                self.vm.graph.add((level_uri, XKOS.depth, Literal(level["depth"], datatype=XSD.integer)))
 
-                for lang, title in level['title'].items():
-                    if  is_valid_value(title):
+                for lang, title in level["title"].items():
+                    if is_valid_value(title):
                         # self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
                         self.vm.graph.add((level_uri, SDO.name, Literal(title, lang=lang)))
 
-                for entry in levels_dict.get(level['depth'], []):
+                for entry in levels_dict.get(level["depth"], []):
                     if is_version:
-                        entry_uri = self.vm.create_uri(concept_data['identifier'],  entry['code'], concept_data['version'])
+                        entry_uri = self.vm.create_uri(
+                            concept_data["identifier"], entry["code"], concept_data["version"]
+                        )
                     else:
-                        entry_uri = self.vm.create_uri(concept_data['identifier'], entry['code'])
+                        entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
 
                     self.vm.graph.add((level_uri, SDO.member, entry_uri))
                     # self.vm.graph.add((level_uri, SKOS.member, entry_uri))
 
-                if previous_level_uri and (is_version == ('version' in str(previous_level_uri))):
+                if previous_level_uri and (is_version == ("version" in str(previous_level_uri))):
                     self.vm.graph.add((previous_level_uri, CUBELINK.nextInHierarchy, level_uri))
                 previous_level_uri = level_uri
 
         # Link from 'All' to first level of same type if exists
-        matching_levels = [level for level in sorted_levels 
-                        if is_version == ('version' in str(URIRef(level['uri'])))]
+        matching_levels = [level for level in sorted_levels if is_version == ("version" in str(URIRef(level["uri"])))]
 
         if matching_levels:
-            first_level_uri = URIRef(matching_levels[0]['uri'])
+            first_level_uri = URIRef(matching_levels[0]["uri"])
             self.vm.graph.add((all_uri, CUBELINK.nextInHierarchy, first_level_uri))

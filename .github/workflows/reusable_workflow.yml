@@ -18,8 +18,12 @@ on:
       BATCH_SIZE:
         required: true
         type: string # strings in env; cast to int in code
-        default: '10'
-    
+        default: "10"
+      STATUSES:
+        required: true
+        type: string
+        default: "Qualified,Standard,PreferredStandard"
+
     secrets:
       STARDOG_PASSWORD:
         required: true
@@ -27,13 +31,14 @@ on:
         required: true
 
 env:
-  PYTHON_VERSION: '3.10'
-  TARGET_GRAPH: 'https://lindas.admin.ch/fso/i14y'
+  PYTHON_VERSION: "3.10"
+  TARGET_GRAPH: "https://lindas.admin.ch/fso/i14y"
   CLEAR_GRAPH: ${{ inputs.CLEAR_GRAPH }}
   LINDAS_UPDATE_URL: ${{ inputs.LINDAS_UPDATE_URL }}
   LINDAS_QUERY_URL: ${{ inputs.LINDAS_QUERY_URL }}
   BASE_API_URL: ${{ inputs.BASE_API_URL }}
   BATCH_SIZE: ${{ inputs.BATCH_SIZE }}
+  STATUSES: ${{ inputs.STATUSES }}
 
 jobs:
   get-concepts:
@@ -85,7 +90,7 @@ jobs:
           batch_size = int(os.environ.get('BATCH_SIZE','30'))
           n_batches = (len(ids) + batch_size - 1) // batch_size
           print(f"Will create {n_batches} batches of size {batch_size}")
-          
+
           # Run at least one empty batch so downstream jobs execute cleanly.
           matrix = {"include": [{"batch_index": i} for i in range(max(1, n_batches))]}
           with open(os.environ['GITHUB_OUTPUT'], 'a') as gh:
@@ -175,7 +180,7 @@ jobs:
           echo "Processing batch ${{ matrix.batch_index }}"
           echo "Concept IDs: $BATCH_CONCEPT_IDS"
           echo "Batch size: ${{ steps.calc-batch.outputs.actual_batch_size }}"
-          
+
           # Run the main script with the environment variable set
           python -m concept2sharedDimension.src.main --batch-index ${{ matrix.batch_index }}
       - name: Validate RDF
@@ -229,12 +234,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-  
+
       - name: Install dependencies
         run: |
           sudo apt-get update
