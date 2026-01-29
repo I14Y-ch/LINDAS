@@ -504,7 +504,7 @@ class I14YAPIHelper:
             try:
                 url = f"{BASE_API_URL}"
                 page = 1
-                page_size = 100
+                page_size = 50
                 all_concepts = []
 
                 while True:
@@ -515,10 +515,20 @@ class I14YAPIHelper:
                         "pageSize": page_size,
                     }
 
-                    response = r.get(url, params=params, verify=False)
-                    response.raise_for_status()
+                    retries = 10
 
-                    data = response.json().get("data", [])
+                    for attempt in range(1, retries + 1):
+                        try:
+                            response = r.get(url, params=params, verify=False)
+                            response.raise_for_status()
+
+                            data = response.json().get("data", [])
+                            break
+
+                        except Exception:
+                            if attempt == retries:
+                                raise
+                            sleep(2)
 
                     # Stop when no more items
                     if not data:
