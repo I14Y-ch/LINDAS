@@ -2,7 +2,7 @@ name: "[TEST] Incremental Update"
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       STATUSES:
@@ -19,7 +19,7 @@ jobs:
       LINDAS_QUERY_URL: "https://test.lindas.admin.ch/query"
       BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
       BATCH_SIZE: "10"
-      STATUSES: ${{ inputs.STATUSES }}
+      STATUSES: ${{ inputs.STATUSES || 'Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded' }}
     secrets:
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
