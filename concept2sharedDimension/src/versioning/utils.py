@@ -613,25 +613,12 @@ class I14YAPIHelper:
         version_data = []
         failed_concepts = []
 
-        def fetch_version_data(version):
-            vid = version["id"]
-            try:
-                data = I14YAPIHelper.get_concept_data(vid)
-                if data is not None:
-                    return vid, data["data"], None
-                else:
-                    return vid, None, vid
-            except Exception as e:
-                return vid, None, vid
-
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = [executor.submit(fetch_version_data, v) for v in sorted_versions]
-            for future in as_completed(futures):
-                vid, data, failed = future.result()
-                if data is not None:
-                    version_data.append(data)
-                if failed is not None:
-                    failed_concepts.append(failed)
+        for version in sorted_versions:
+            data = I14YAPIHelper.get_concept_data(version["id"])
+            if data is not None:
+                version_data.append(data["data"])
+            else:
+                failed_concepts.append(version["id"])
 
         # Give warning if any concepts failed to retrieve
         if failed_concepts:

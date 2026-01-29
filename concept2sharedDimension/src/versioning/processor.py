@@ -30,12 +30,26 @@ class VersionProcessor:
 
             concepts_unchanged = []
 
-            for concept in concepts:
+            concept_versions = {}
+
+            def fetch_versions(concept):
                 identifier = concept["identifier"]
+                return concept["id"], {
+                    "i14y": I14YAPIHelper.get_i14y_code_versions(identifier),
+                    "lindas": LindasAPIHelper.get_lindas_code_versions(identifier),
+                }
+
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                futures = {executor.submit(fetch_versions, c): c for c in concepts}
+                for future in as_completed(futures):
+                    concept_id, versions = future.result()
+                    concept_versions[concept_id] = versions
+
+            for concept in concepts:
                 concept_id = concept["id"]
-                # Versions are sorted in chronological order
-                i14y_code_versions = I14YAPIHelper.get_i14y_code_versions(identifier)
-                lindas_code_versions = LindasAPIHelper.get_lindas_code_versions(identifier)
+                identifier = concept["identifier"]
+                i14y_code_versions = concept_versions[concept_id]["i14y"]
+                lindas_code_versions = concept_versions[concept_id]["lindas"]
 
                 if set(i14y_code_versions.keys()) != set(lindas_code_versions.keys()):
                     print(f"DEBUG: for concept {identifier} there are different versions on LINDAS and i14y")
