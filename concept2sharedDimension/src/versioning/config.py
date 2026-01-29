@@ -40,6 +40,8 @@ SKOLEM_VERSION_BASE_URI = BASE_URI + "{concept_identifier}/.well-known/genid/{ha
 # API_TOKEN = "" # not necessary for prod and public concepts
 BASE_API_URL = os.environ.get("BASE_API_URL", "https://api-a.i14y.admin.ch/api/public/v1/concepts/")
 
+MAX_WORKERS = os.environ.get("MAX_WORKERS", 5)
+
 # namespace
 SDO = Namespace("http://schema.org/")
 CUBELINK = Namespace("https://cube.link/meta/")

@@ -11,7 +11,6 @@ jobs:
       LINDAS_UPDATE_URL: "https://graphdb.int.cz-aws.net/repositories/lindas"
       LINDAS_QUERY_URL: "https://lindas.int.cz-aws.net/query"
       BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
-      BATCH_SIZE: "5"
       STATUSES: "Qualified,Standard,PreferredStandard"
     secrets:
       STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}

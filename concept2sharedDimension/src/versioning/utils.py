@@ -1,9 +1,11 @@
+import heapq
 from time import time, sleep
 from urllib.parse import urlparse
 import requests as r
 from .config import *
 import warnings
 from urllib3.exceptions import InsecureRequestWarning
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
@@ -446,6 +448,50 @@ class I14YAPIHelper:
         return list(I14YAPIHelper.local_id_concepts_map.values())
 
     @staticmethod
+    def get_concept_batches():
+        # 1. Fetch all concepts
+        all_concepts = I14YAPIHelper.get_all_concepts()
+        all_concept_data = {}
+
+        # 2. Function to fetch concept data
+        def fetch_data(concept):
+            concept_id = concept["id"]
+            data = I14YAPIHelper.get_concept_data(concept_id)["data"]
+            return concept_id, data
+
+        # 3. Parallelize API calls using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(fetch_data, c) for c in all_concepts]
+            for future in as_completed(futures):
+                concept_id, data = future.result()
+                all_concept_data[concept_id] = data
+
+        # 4. Compute size of each concept (number of codeListEntries)
+        concept_sizes = [(cid, len(data.get("codeListEntries", []))) for cid, data in all_concept_data.items()]
+
+        # 5. Set n_batches so that no batch is bigger than the biggest codeListEntries
+        max_entries = max(len(data.get("codeListEntries", [])) for _, data in all_concept_data.items())
+        total_entries = sum(len(data.get("codeListEntries", [])) for _, data in all_concept_data.items())
+        n_batches = max(1, total_entries // max_entries)
+
+        # 6. Initialize min-heap for Largest Differencing
+        # Each heap element: (current_sum, batch_index, list_of_ids)
+        batches_heap = [(0, i, []) for i in range(n_batches)]
+        heapq.heapify(batches_heap)
+
+        # 7. Sort concepts largest first
+        for concept_id, size in sorted(concept_sizes, key=lambda x: -x[1]):
+            current_sum, batch_idx, batch_list = heapq.heappop(batches_heap)
+            batch_list.append(concept_id)
+            current_sum += size
+            heapq.heappush(batches_heap, (current_sum, batch_idx, batch_list))
+
+        # 8. Extract only the list of concept IDs, ordered by batch index
+        batches = [batch_list for _, batch_idx, batch_list in sorted(batches_heap, key=lambda x: x[1])]
+
+        return batches
+
+    @staticmethod
     def get_concept_data(concept_id):
         """Get combined concept metadata and codelist entries"""
         if concept_id not in I14YAPIHelper.local_id_concepts_map.keys():
@@ -567,12 +613,25 @@ class I14YAPIHelper:
         version_data = []
         failed_concepts = []
 
-        for version in sorted_versions:
-            data = I14YAPIHelper.get_concept_data(version["id"])
-            if data is not None:
-                version_data.append(data["data"])
-            else:
-                failed_concepts.append(version["id"])
+        def fetch_version_data(version):
+            vid = version["id"]
+            try:
+                data = I14YAPIHelper.get_concept_data(vid)
+                if data is not None:
+                    return vid, data["data"], None
+                else:
+                    return vid, None, vid
+            except Exception as e:
+                return vid, None, vid
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(fetch_version_data, v) for v in sorted_versions]
+            for future in as_completed(futures):
+                vid, data, failed = future.result()
+                if data is not None:
+                    version_data.append(data)
+                if failed is not None:
+                    failed_concepts.append(failed)
 
         # Give warning if any concepts failed to retrieve
         if failed_concepts:

@@ -15,10 +15,6 @@ on:
       BASE_API_URL:
         required: true
         type: string
-      BATCH_SIZE:
-        required: true
-        type: string # strings in env; cast to int in code
-        default: "10"
       STATUSES:
         required: true
         type: string
@@ -37,7 +33,6 @@ env:
   LINDAS_UPDATE_URL: ${{ inputs.LINDAS_UPDATE_URL }}
   LINDAS_QUERY_URL: ${{ inputs.LINDAS_QUERY_URL }}
   BASE_API_URL: ${{ inputs.BASE_API_URL }}
-  BATCH_SIZE: ${{ inputs.BATCH_SIZE }}
   STATUSES: ${{ inputs.STATUSES }}
 
 jobs:
@@ -80,26 +75,21 @@ jobs:
           import json, os
           from concept2sharedDimension.src.versioning.utils import I14YAPIHelper
           from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
-          if USE_STATUSES:
-              print("Using status-based filtering")
-              concepts = I14YAPIHelper.get_all_concepts(STATUSES)
-              ids = [c['id'] for c in concepts]
-              print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
-          else:
-              print("Using hardcoded concept IDs from config")
-              ids = CONCEPT_IDS
-              print(f"Total hardcoded concept IDs: {len(ids)}")
-              print(f"Concept IDs: {ids[:3]}{'...' if len(ids) > 3 else ''}")
-          batch_size = int(os.environ.get('BATCH_SIZE','30'))
-          n_batches = (len(ids) + batch_size - 1) // batch_size
-          print(f"Will create {n_batches} batches of size {batch_size}")
+          print("Using status-based filtering")
+          concepts = I14YAPIHelper.get_all_concepts()
+          ids = [c["id"] for c in concepts]
+          print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
 
-          # Run at least one empty batch so downstream jobs execute cleanly.
-          matrix = {"include": [{"batch_index": i} for i in range(max(1, n_batches))]}
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as gh:
-            print(f"concept_ids={','.join(ids)}", file=gh)
-            print(f"total_concepts={len(ids)}", file=gh)
-            print(f"batch_matrix={json.dumps(matrix)}", file=gh)
+          batches = I14YAPIHelper.get_concept_batches()
+          n_batches = len(batches)
+          print(f"Will create {n_batches} batches")
+
+          # Build GitHub Actions matrix
+          matrix = {"include": [{"batch_index": i, "concept_ids": ",".join(batch)} for i, batch in enumerate(batches)]}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
+              print(f"concept_ids={','.join(ids)}", file=gh)
+              print(f"total_concepts={len(ids)}", file=gh)
+              print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
       - name: Delete concepts on LINDAS that are not on I14Y
         if: env.CLEAR_GRAPH == 'false'
@@ -140,39 +130,14 @@ jobs:
         id: calc-batch
         shell: bash
         run: |
-          CONCEPT_IDS='${{ needs.get-concepts.outputs.concept_ids }}'
-          BATCH_SIZE=${{ env.BATCH_SIZE }}
-          BATCH_INDEX=${{ matrix.batch_index }}
-          # Convert comma-separated string to array
-          IFS=',' read -ra ID_ARRAY <<< "$CONCEPT_IDS"
-          TOTAL_IDS=${#ID_ARRAY[@]}
-          echo "Total concept IDs: $TOTAL_IDS"
-          echo "Batch size: $BATCH_SIZE" 
-          echo "Batch index: $BATCH_INDEX"
-          START=$((BATCH_INDEX * BATCH_SIZE))
-          END=$((START + BATCH_SIZE))
-          echo "Calculated range: $START to $END"
-          # Handle case where END exceeds array size
-          if [ $END -gt $TOTAL_IDS ]; then
-            END=$TOTAL_IDS
-          fi
-          BATCH_IDS=""
-          for ((i=START; i<END && i<TOTAL_IDS; i++)); do
-            if [ -n "$BATCH_IDS" ]; then
-              BATCH_IDS="$BATCH_IDS,${ID_ARRAY[i]}"
-            else
-              BATCH_IDS="${ID_ARRAY[i]}"
-            fi
-          done
-          echo "Batch IDs for batch $BATCH_INDEX: $BATCH_IDS"
-          echo "Processing concepts from index $START to $((END-1))"
+          BATCH_IDS="${{ matrix.concept_ids }}"
+          echo "Batch IDs for batch ${{ matrix.batch_index }}: $BATCH_IDS"
+          echo "Processing $(echo "$BATCH_IDS" | tr ',' '\n' | wc -l) concepts"
           {
             echo "batch_ids=$BATCH_IDS"
-            echo "batch_start=$START"
-            echo "batch_end=$END"
             echo "actual_batch_size=$(echo "$BATCH_IDS" | tr ',' '\n' | wc -l)"
           } >> "$GITHUB_OUTPUT"
-      - name: Process batch ${{ matrix.batch_index }} (${{ steps.calc-batch.outputs.batch_start }}-${{ steps.calc-batch.outputs.batch_end }})
+      - name: Process batch ${{ matrix.batch_index }}
         if: steps.calc-batch.outputs.batch_ids != ''
         env:
           BATCH_CONCEPT_IDS: ${{ steps.calc-batch.outputs.batch_ids }}
@@ -360,6 +325,5 @@ jobs:
         run: |
           echo "Processing Summary:"
           echo "Total concepts: ${{ needs.get-concepts.outputs.total_concepts }}"
-          echo "Batch size: ${{ env.BATCH_SIZE }}"
           echo "All batches have been processed and uploaded to LINDAS"
           echo "Target graph: ${{ env.TARGET_GRAPH }}"

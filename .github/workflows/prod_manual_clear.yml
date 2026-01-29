@@ -8,10 +8,9 @@ jobs:
     uses: ./.github/workflows/reusable_workflow.yml
     with:
       CLEAR_GRAPH: true
-      LINDAS_UPDATE_URL: 'https://stardog.cluster.ldbar.ch/lindas'
-      LINDAS_QUERY_URL: 'https://lindas.admin.ch/query'
-      BASE_API_URL: 'https://api.i14y.admin.ch/api/public/v1/concepts/'
-      BATCH_SIZE: '10'
+      LINDAS_UPDATE_URL: "https://stardog.cluster.ldbar.ch/lindas"
+      LINDAS_QUERY_URL: "https://lindas.admin.ch/query"
+      BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
     secrets:
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
