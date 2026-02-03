@@ -56,6 +56,7 @@ class LindasAPIHelper:
 
         headers = {
             "Content-Type": "application/sparql-update",
+            "User-Agent": I14Y_USER_AGENT,
         }
 
         auth = None
@@ -97,7 +98,10 @@ class LindasAPIHelper:
             if not graphdb_url.endswith("/statements"):
                 graphdb_url += "/statements"
 
-            headers = {"Content-Type": "text/turtle"}
+            headers = {
+                "Content-Type": "text/turtle",
+                "User-Agent": I14Y_USER_AGENT,
+            }
             params = {"context": f"<{graph_uri}>"}
 
             with open(file_path, "rb") as f:
@@ -131,7 +135,14 @@ class LindasAPIHelper:
 
             # Begin transaction
             tx_url = f"{server_root.rstrip('/')}/{database}/transaction/begin"
-            tx_resp = r.post(tx_url, auth=auth, verify=False)
+            tx_resp = r.post(
+                tx_url,
+                auth=auth,
+                verify=False,
+                headers={
+                    "User-Agent": I14Y_USER_AGENT,
+                },
+            )
             tx_resp.raise_for_status()
             transaction = tx_resp.text.strip('"')
             print(f"Started Stardog transaction: {transaction}")
@@ -150,7 +161,10 @@ class LindasAPIHelper:
                     add_resp = r.post(
                         add_url,
                         data=f,
-                        headers={"Content-Type": "text/turtle"},
+                        headers={
+                            "Content-Type": "text/turtle",
+                            "User-Agent": I14Y_USER_AGENT,
+                        },
                         params=params,
                         auth=auth,
                         timeout=1800,
@@ -159,21 +173,42 @@ class LindasAPIHelper:
 
                 if add_resp.status_code not in (200, 204):
                     # Rollback on error
-                    r.post(rollback_url, auth=auth, verify=False)
+                    r.post(
+                        rollback_url,
+                        auth=auth,
+                        verify=False,
+                        headers={
+                            "User-Agent": I14Y_USER_AGENT,
+                        },
+                    )
                     raise Exception(
                         f"Stardog upload failed: {add_resp.status_code} {add_resp.text}\n"
                         f"URL: {add_url}\nParams: {params}"
                     )
 
                 # Commit transaction
-                commit_resp = r.post(commit_url, auth=auth, verify=False)
+                commit_resp = r.post(
+                    commit_url,
+                    auth=auth,
+                    verify=False,
+                    headers={
+                        "User-Agent": I14Y_USER_AGENT,
+                    },
+                )
                 commit_resp.raise_for_status()
                 print("Upload successful (Stardog)")
 
             except Exception as e:
                 # Ensure rollback in case of any exception
                 try:
-                    r.post(rollback_url, auth=auth, verify=False)
+                    r.post(
+                        rollback_url,
+                        auth=auth,
+                        verify=False,
+                        headers={
+                            "User-Agent": I14Y_USER_AGENT,
+                        },
+                    )
                 except Exception:
                     pass  # ignore rollback errors
                 raise e
@@ -214,7 +249,11 @@ class LindasAPIHelper:
     @staticmethod
     def lindas_query(query):
         url = LINDAS_QUERY_URL
-        headers = {"Accept": "application/sparql-results+json", "Accept-Encoding": "identity"}
+        headers = {
+            "Accept": "application/sparql-results+json",
+            "Accept-Encoding": "identity",
+            "User-Agent": I14Y_USER_AGENT,
+        }
 
         if DEBUG_LOCAL_TEST:
             resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False, proxies=PROXIES)
@@ -381,7 +420,14 @@ class I14YAPIHelper:
                 retries = 10
                 for attempt in range(1, retries + 1):
                     try:
-                        response = r.get(base_url, params=params, verify=False)
+                        response = r.get(
+                            base_url,
+                            params=params,
+                            verify=False,
+                            headers={
+                                "User-Agent": I14Y_USER_AGENT,
+                            },
+                        )
                         response.raise_for_status()
                         break
                     except Exception as e:
@@ -498,7 +544,13 @@ class I14YAPIHelper:
             print(f"DEBUG: get_concept_data get API call for concept_id: {concept_id}")
             # Get concept metadata
             meta_url = f"{BASE_API_URL}{concept_id}"
-            meta_response = r.get(meta_url, verify=False)
+            meta_response = r.get(
+                meta_url,
+                verify=False,
+                headers={
+                    "User-Agent": I14Y_USER_AGENT,
+                },
+            )
             meta_response.raise_for_status()
             concept_data = meta_response.json()["data"]
 
@@ -516,7 +568,13 @@ class I14YAPIHelper:
 
             for attempt in range(1, retries + 1):
                 try:
-                    entries_response = r.get(entries_url, verify=False)
+                    entries_response = r.get(
+                        entries_url,
+                        verify=False,
+                        headers={
+                            "User-Agent": I14Y_USER_AGENT,
+                        },
+                    )
                     entries_response.raise_for_status()
                     concept_data["codeListEntries"] = entries_response.json()["data"]
                     I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
@@ -565,7 +623,14 @@ class I14YAPIHelper:
 
                     for attempt in range(1, retries + 1):
                         try:
-                            response = r.get(url, params=params, verify=False)
+                            response = r.get(
+                                url,
+                                params=params,
+                                verify=False,
+                                headers={
+                                    "User-Agent": I14Y_USER_AGENT,
+                                },
+                            )
                             response.raise_for_status()
 
                             data = response.json().get("data", [])

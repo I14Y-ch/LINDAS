@@ -54,3 +54,6 @@ dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/app
 ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
+
+
+I14Y_USER_AGENT = "I14Y to LINDAS pipeline (contact: i14y@bfs.admin.ch)"
