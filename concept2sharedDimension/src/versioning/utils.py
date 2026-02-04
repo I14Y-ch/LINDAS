@@ -1,4 +1,5 @@
 import heapq
+import random
 import re
 from time import time, sleep
 from urllib.parse import urlparse
@@ -496,7 +497,7 @@ class I14YAPIHelper:
                     except Exception as e:
                         if attempt == retries:
                             raise
-                        sleep(2)
+                        sleep(random.uniform(1, 2))
 
                 data = response.json().get("data", [])
 
@@ -607,15 +608,25 @@ class I14YAPIHelper:
             print(f"DEBUG: get_concept_data get API call for concept_id: {concept_id}")
             # Get concept metadata
             meta_url = f"{BASE_API_URL}{concept_id}"
-            meta_response = r.get(
-                meta_url,
-                verify=False if DEBUG_LOCAL_TEST else True,
-                headers={
-                    "User-Agent": I14Y_USER_AGENT,
-                },
-            )
-            meta_response.raise_for_status()
-            concept_data = meta_response.json()["data"]
+
+            retries = 10
+
+            for attempt in range(1, retries + 1):
+                try:
+                    meta_response = r.get(
+                        meta_url,
+                        verify=False if DEBUG_LOCAL_TEST else True,
+                        headers={
+                            "User-Agent": I14Y_USER_AGENT,
+                        },
+                    )
+                    meta_response.raise_for_status()
+                    concept_data = meta_response.json()["data"]
+                    break
+                except Exception:
+                    if attempt == retries:
+                        raise
+                    sleep(random.uniform(1, 2))
 
             I14YAPIHelper.local_id_concepts_map[concept_id] = concept_data
 
@@ -645,7 +656,7 @@ class I14YAPIHelper:
                 except Exception:
                     if attempt == retries:
                         raise
-                    sleep(2)
+                    sleep(random.uniform(1, 2))
 
         # Return in legacy format
         return {"data": I14YAPIHelper.local_id_concepts_map[concept_id]}
@@ -702,7 +713,7 @@ class I14YAPIHelper:
                         except Exception:
                             if attempt == retries:
                                 raise
-                            sleep(2)
+                            sleep(random.uniform(1, 2))
 
                     # Stop when no more items
                     if not data:
