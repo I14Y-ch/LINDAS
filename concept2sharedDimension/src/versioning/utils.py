@@ -362,24 +362,31 @@ class LindasAPIHelper:
     def get_lindas_concept_attributes(concept_identifier):
         if concept_identifier not in LindasAPIHelper.lindas_concept_attributes.keys():
             query = f"""
-    PREFIX schema: <http://schema.org/>
-    PREFIX vl: <https://version.link/>
-    PREFIX adms: <https://www.w3.org/TR/vocab-adms/#adms_>
-    PREFIX pav: <http://purl.org/pav/>
-    SELECT ?version ?status ?lang ?title ?description
-    WHERE {{
-        GRAPH <https://lindas.admin.ch/fso/i14y> {{
-            ?concept a schema:DefinedTermSet ;
-                    a vl:Version ;
-                    schema:identifier "{concept_identifier}" ;
-                    schema:name ?title ;
-                    schema:description ?description ;
-                    adms:status ?status ;
-                    pav:version ?version .
-            BIND(lang(?title) AS ?lang)
-            FILTER(lang(?title) = lang(?description))
-        }}
+PREFIX schema: <http://schema.org/>
+PREFIX adms: <https://www.w3.org/TR/vocab-adms/#adms_>
+PREFIX pav: <http://purl.org/pav/>
+PREFIX vl: <https://version.link/>
+
+SELECT ?version ?status ?attr ?lang ?value
+WHERE {{
+  GRAPH <https://lindas.admin.ch/fso/i14y> {{
+    ?concept a schema:DefinedTermSet ;
+            a vl:Version ;
+             schema:identifier "{concept_identifier}" ;
+             adms:status ?status ;
+             pav:version ?version .
+
+    {{ ?concept schema:name ?value .
+      BIND("name" AS ?attr)
     }}
+    UNION
+    {{ ?concept schema:description ?value .
+      BIND("description" AS ?attr)
+    }}
+
+    BIND(LANG(?value) AS ?lang)
+  }}
+}}
     """
             version_attributes_dict = {}
             print("DEBUG: get_lindas_concept_attributes get API call for concept_identifier: " + concept_identifier)
@@ -396,13 +403,14 @@ class LindasAPIHelper:
                 version_attributes_dict[version]["registrationStatus"] = status
 
                 lang = result.get("lang", {}).get("value")
-                title = result.get("title", {}).get("value")
-                # Title on LINDAS is like "xxx (version a.b.c)" or "xxx (Identity)" so we extract what is before "(...)"
-                title = re.sub(r"\s*\([^)]*\)$", "", title)
-                description = result.get("description", {}).get("value")
 
-                version_attributes_dict[version]["name"][lang] = title
-                version_attributes_dict[version]["description"][lang] = description
+                attr = result.get("attr", {}).get("value")
+                value = result.get("value", {}).get("value")
+                if attr == "name":
+                    # Title on LINDAS is like "xxx (version a.b.c)" or "xxx (Identity)" so we extract what is before "(...)"
+                    value = re.sub(r"\s*\([^)]*\)$", "", value)
+
+                version_attributes_dict[version][attr][lang] = value
 
             LindasAPIHelper.lindas_concept_attributes[concept_identifier] = version_attributes_dict
 

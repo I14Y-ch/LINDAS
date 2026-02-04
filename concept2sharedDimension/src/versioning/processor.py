@@ -14,6 +14,10 @@ class VersionProcessor:
         self.failed_concepts = []  # Track failed concepts
 
     def i14y_concept_equal_lindas_concept(self, identifier):
+
+        def normalize_text(s):
+            return s.replace("\r\n", "\n").replace("\r", "\n").strip()
+
         lindas_concept_attributes = LindasAPIHelper.get_lindas_concept_attributes(identifier)
         concept_version_list = I14YAPIHelper.get_version_list(identifier)
 
@@ -33,7 +37,7 @@ class VersionProcessor:
                 for lang, i14y_name in i14y_concept[attribute].items():
                     if lang not in lindas_concept[attribute].keys():
                         return False
-                    if not i14y_name == lindas_concept[attribute][lang]:
+                    if not normalize_text(i14y_name) == normalize_text(lindas_concept[attribute][lang]):
                         return False
 
         return True
