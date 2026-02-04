@@ -13,7 +13,7 @@ class VersionProcessor:
         # self.version_data = []
         self.failed_concepts = []  # Track failed concepts
 
-    def i14y_concept_equal_lindas_concept(identifier):
+    def i14y_concept_equal_lindas_concept(self, identifier):
         lindas_concept_attributes = LindasAPIHelper.get_lindas_concept_attributes(identifier)
         concept_version_list = I14YAPIHelper.get_version_list(identifier)
 
