@@ -1,4 +1,5 @@
 import heapq
+import re
 from time import time, sleep
 from urllib.parse import urlparse
 import requests as r
@@ -42,6 +43,10 @@ class LindasAPIHelper:
     # Key: concept identifier, value:
     #    dict with key: version and value: set of codes
     lindas_code_versions = {}
+
+    # Key: concept identifier, value:
+    #   dict with key: version and value: dict with following attributes: title, description, status
+    lindas_concept_attributes = {}
 
     @staticmethod
     def graphdb_update(update_query):
@@ -111,7 +116,7 @@ class LindasAPIHelper:
                     headers=headers,
                     auth=auth,
                     timeout=1800,
-                    verify=False,
+                    verify=False if DEBUG_LOCAL_TEST else True,
                     params=params,
                     # proxies=PROXIES if DEBUG_LOCAL_TEST else None,
                 )
@@ -138,7 +143,7 @@ class LindasAPIHelper:
             tx_resp = r.post(
                 tx_url,
                 auth=auth,
-                verify=False,
+                verify=False if DEBUG_LOCAL_TEST else True,
                 headers={
                     "User-Agent": I14Y_USER_AGENT,
                 },
@@ -168,7 +173,7 @@ class LindasAPIHelper:
                         params=params,
                         auth=auth,
                         timeout=1800,
-                        verify=False,
+                        verify=False if DEBUG_LOCAL_TEST else True,
                     )
 
                 if add_resp.status_code not in (200, 204):
@@ -176,7 +181,7 @@ class LindasAPIHelper:
                     r.post(
                         rollback_url,
                         auth=auth,
-                        verify=False,
+                        verify=False if DEBUG_LOCAL_TEST else True,
                         headers={
                             "User-Agent": I14Y_USER_AGENT,
                         },
@@ -190,7 +195,7 @@ class LindasAPIHelper:
                 commit_resp = r.post(
                     commit_url,
                     auth=auth,
-                    verify=False,
+                    verify=False if DEBUG_LOCAL_TEST else True,
                     headers={
                         "User-Agent": I14Y_USER_AGENT,
                     },
@@ -204,7 +209,7 @@ class LindasAPIHelper:
                     r.post(
                         rollback_url,
                         auth=auth,
-                        verify=False,
+                        verify=False if DEBUG_LOCAL_TEST else True,
                         headers={
                             "User-Agent": I14Y_USER_AGENT,
                         },
@@ -258,7 +263,7 @@ class LindasAPIHelper:
         if DEBUG_LOCAL_TEST:
             resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False, proxies=PROXIES)
         else:
-            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False)
+            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=True)
         resp.raise_for_status()
         data = resp.json()
         results = data.get("results", {}).get("bindings", [])
@@ -327,15 +332,15 @@ class LindasAPIHelper:
                 PREFIX pav: <http://purl.org/pav/>
                 SELECT ?code_identifier ?version
                 WHERE {{
-                GRAPH <{TARGET_GRAPH}> {{
-                    ?code a schema:DefinedTerm;
-                        a vl:Version;
-                        schema:identifier ?code_identifier.
-                    ?concept a schema:DefinedTermSet;
-                            schema:identifier "{concept_identifier}";
-                            schema:hasDefinedTerm ?code;
-                            pav:version ?version.
-                }}
+                    GRAPH <{TARGET_GRAPH}> {{
+                        ?code a schema:DefinedTerm;
+                            a vl:Version;
+                            schema:identifier ?code_identifier.
+                        ?concept a schema:DefinedTermSet;
+                                schema:identifier "{concept_identifier}";
+                                schema:hasDefinedTerm ?code;
+                                pav:version ?version.
+                    }}
                 }}
                 """
             version_codes_dict = {}
@@ -352,6 +357,56 @@ class LindasAPIHelper:
             LindasAPIHelper.lindas_code_versions[concept_identifier] = version_codes_dict
 
         return LindasAPIHelper.lindas_code_versions[concept_identifier]
+
+    @staticmethod
+    def get_lindas_concept_attributes(concept_identifier):
+        if concept_identifier not in LindasAPIHelper.lindas_concept_attributes.keys():
+            query = f"""
+    PREFIX schema: <http://schema.org/>
+    PREFIX vl: <https://version.link/>
+    PREFIX adms: <https://www.w3.org/TR/vocab-adms/#adms_>
+    PREFIX pav: <http://purl.org/pav/>
+    SELECT ?version ?status ?lang ?title ?description
+    WHERE {{
+        GRAPH <https://lindas.admin.ch/fso/i14y> {{
+            ?concept a schema:DefinedTermSet ;
+                    a vl:Version ;
+                    schema:identifier "{concept_identifier}" ;
+                    schema:name ?title ;
+                    schema:description ?description ;
+                    adms:status ?status ;
+                    pav:version ?version .
+            BIND(lang(?title) AS ?lang)
+            FILTER(lang(?title) = lang(?description))
+        }}
+    }}
+    """
+            version_attributes_dict = {}
+            print("DEBUG: get_lindas_concept_attributes get API call for concept_identifier: " + concept_identifier)
+            results = LindasAPIHelper.lindas_query(query)
+            for result in results:
+                version = result.get("version", {}).get("value")
+
+                if version not in version_attributes_dict.keys():
+                    # "title" in LINDAS = "name" in i14y
+                    version_attributes_dict[version] = {"description": {}, "name": {}}
+
+                status = result.get("status", {}).get("value")
+
+                version_attributes_dict[version]["registrationStatus"] = status
+
+                lang = result.get("lang", {}).get("value")
+                title = result.get("title", {}).get("value")
+                # Title on LINDAS is like "xxx (version a.b.c)" or "xxx (Identity)" so we extract what is before "(...)"
+                title = re.sub(r"\s*\([^)]*\)$", "", title)
+                description = result.get("description", {}).get("value")
+
+                version_attributes_dict[version]["name"][lang] = title
+                version_attributes_dict[version]["description"][lang] = description
+
+            LindasAPIHelper.lindas_concept_attributes[concept_identifier] = version_attributes_dict
+
+        return LindasAPIHelper.lindas_concept_attributes[concept_identifier]
 
     @staticmethod
     def delete_concept(concept_identifier):
@@ -423,7 +478,7 @@ class I14YAPIHelper:
                         response = r.get(
                             base_url,
                             params=params,
-                            verify=False,
+                            verify=False if DEBUG_LOCAL_TEST else True,
                             headers={
                                 "User-Agent": I14Y_USER_AGENT,
                             },
@@ -546,7 +601,7 @@ class I14YAPIHelper:
             meta_url = f"{BASE_API_URL}{concept_id}"
             meta_response = r.get(
                 meta_url,
-                verify=False,
+                verify=False if DEBUG_LOCAL_TEST else True,
                 headers={
                     "User-Agent": I14Y_USER_AGENT,
                 },
@@ -570,7 +625,7 @@ class I14YAPIHelper:
                 try:
                     entries_response = r.get(
                         entries_url,
-                        verify=False,
+                        verify=False if DEBUG_LOCAL_TEST else True,
                         headers={
                             "User-Agent": I14Y_USER_AGENT,
                         },
@@ -626,7 +681,7 @@ class I14YAPIHelper:
                             response = r.get(
                                 url,
                                 params=params,
-                                verify=False,
+                                verify=False if DEBUG_LOCAL_TEST else True,
                                 headers={
                                     "User-Agent": I14Y_USER_AGENT,
                                 },

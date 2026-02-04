@@ -13,6 +13,31 @@ class VersionProcessor:
         # self.version_data = []
         self.failed_concepts = []  # Track failed concepts
 
+    def i14y_concept_equal_lindas_concept(identifier):
+        lindas_concept_attributes = LindasAPIHelper.get_lindas_concept_attributes(identifier)
+        concept_version_list = I14YAPIHelper.get_version_list(identifier)
+
+        # The concept versiosn are sorted by chronological order
+        for i14y_concept in concept_version_list:
+            i14y_version = i14y_concept["version"]
+
+            if i14y_version not in lindas_concept_attributes.keys():
+                return False
+
+            lindas_concept = lindas_concept_attributes[i14y_version]
+
+            if not i14y_concept["registrationStatus"] == lindas_concept["registrationStatus"]:
+                return False
+
+            for attribute in ["name", "description"]:
+                for lang, i14y_name in i14y_concept[attribute].items():
+                    if lang not in lindas_concept[attribute].keys():
+                        return False
+                    if not i14y_name == lindas_concept[attribute][lang]:
+                        return False
+
+        return True
+
     @timer
     def process_all_concepts(self, concept_ids=None, registration_statuses=None, clear_graph=CLEAR_GRAPH):
         """Process multiple concepts"""
@@ -34,6 +59,8 @@ class VersionProcessor:
 
             def fetch_versions(concept):
                 identifier = concept["identifier"]
+                # We use get_lindas_code_versions in thread, it's ok because 2 threads never process the same identifier
+                LindasAPIHelper.get_lindas_concept_attributes(identifier)
                 return concept["id"], {
                     "i14y": I14YAPIHelper.get_i14y_code_versions(identifier),
                     "lindas": LindasAPIHelper.get_lindas_code_versions(identifier),
@@ -48,6 +75,14 @@ class VersionProcessor:
             for concept in concepts:
                 concept_id = concept["id"]
                 identifier = concept["identifier"]
+
+                if not self.i14y_concept_equal_lindas_concept(identifier):
+                    print(
+                        f"DEBUG: for concept {identifier} there are differences in attributes between LINDAS and i14y"
+                    )
+                    concepts_to_delete_identifiers.add(identifier)
+                    continue
+
                 i14y_code_versions = concept_versions[concept_id]["i14y"]
                 lindas_code_versions = concept_versions[concept_id]["lindas"]
 
