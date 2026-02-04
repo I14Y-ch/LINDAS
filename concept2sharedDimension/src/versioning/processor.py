@@ -34,10 +34,10 @@ class VersionProcessor:
                 return False
 
             for attribute in ["name", "description"]:
-                for lang, i14y_name in i14y_concept[attribute].items():
-                    if lang not in lindas_concept[attribute].keys():
+                for lang, i14y_attr in i14y_concept[attribute].items():
+                    if i14y_attr and lang not in lindas_concept[attribute].keys():
                         return False
-                    if not normalize_text(i14y_name) == normalize_text(lindas_concept[attribute][lang]):
+                    if i14y_attr and not normalize_text(i14y_attr) == normalize_text(lindas_concept[attribute][lang]):
                         return False
 
         return True
