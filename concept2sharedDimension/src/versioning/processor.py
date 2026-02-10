@@ -59,6 +59,8 @@ class VersionProcessor:
 
             concepts_unchanged = []
 
+            concepts_to_ignore = []
+
             concept_versions = {}
 
             def fetch_versions(concept):
@@ -80,6 +82,10 @@ class VersionProcessor:
                 concept_id = concept["id"]
                 identifier = concept["identifier"]
 
+                i14y_code_versions = concept_versions[concept_id]["i14y"]
+
+                lindas_code_versions = concept_versions[concept_id]["lindas"]
+
                 if not self.i14y_concept_equal_lindas_concept(identifier):
                     print(
                         f"DEBUG: for concept {identifier} there are differences in attributes between LINDAS and i14y"
@@ -87,12 +93,15 @@ class VersionProcessor:
                     concepts_to_delete_identifiers.add(identifier)
                     continue
 
-                i14y_code_versions = concept_versions[concept_id]["i14y"]
-                lindas_code_versions = concept_versions[concept_id]["lindas"]
-
                 if set(i14y_code_versions.keys()) != set(lindas_code_versions.keys()):
                     print(f"DEBUG: for concept {identifier} there are different versions on LINDAS and i14y")
                     concepts_to_delete_identifiers.add(identifier)
+                    continue
+
+                # We don't add concepts with empty codelists on LINDAS
+                # We do this after the if set(i14y_code_versions.keys()) != set(lindas_code_versions.keys()) condition because there are already some concepts with empty codelists on LINDAS, we should remove them
+                if all([len(codelist) == 0 for codelist in i14y_code_versions.values()]):
+                    concepts_to_ignore.append(concept_id)
                     continue
 
                 nb_same_versions = 0
@@ -115,8 +124,8 @@ class VersionProcessor:
             for concept_identifier in concepts_to_delete_identifiers:
                 LindasAPIHelper.delete_concept(concept_identifier)
 
-            # We reimport only concepts that have changed on I14y
-            concept_ids = list(set(concept_ids) - set(concepts_unchanged))
+            # We reimport only concepts that have changed on I14y + those that are not ignored (e.g. we ignore concepts with empty codelists)
+            concept_ids = list(set(concept_ids) - set(concepts_unchanged) - set(concepts_to_ignore))
 
         for concept_id in concept_ids:
             self.process_new_concept(concept_id)
