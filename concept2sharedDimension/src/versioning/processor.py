@@ -93,15 +93,19 @@ class VersionProcessor:
                     concepts_to_delete_identifiers.add(identifier)
                     continue
 
-                if set(i14y_code_versions.keys()) != set(lindas_code_versions.keys()):
+                not_same_versions = set(i14y_code_versions.keys()) != set(lindas_code_versions.keys())
+                if not_same_versions:
                     print(f"DEBUG: for concept {identifier} there are different versions on LINDAS and i14y")
                     concepts_to_delete_identifiers.add(identifier)
-                    continue
 
                 # We don't add concepts with empty codelists on LINDAS
-                # We do this after the if set(i14y_code_versions.keys()) != set(lindas_code_versions.keys()) condition because there are already some concepts with empty codelists on LINDAS, we should remove them
-                if all([len(codelist) == 0 for codelist in i14y_code_versions.values()]):
+                empty_codelist = all([len(codelist) == 0 for codelist in i14y_code_versions.values()])
+                if empty_codelist:
+                    print(f"DEBUG: for concept {identifier} the codelist is empty on i14y")
                     concepts_to_ignore.append(concept_id)
+
+                # There was a case when on LINDAS there were already concepts with empty codelists, this way we delete them on LINDAS and do not reimport them
+                if not_same_versions or empty_codelist:
                     continue
 
                 nb_same_versions = 0
