@@ -69,26 +69,37 @@ class LindasAPIHelper:
         if graphdb_user and graphdb_password:
             auth = (graphdb_user, graphdb_password)
 
-        if DEBUG_LOCAL_TEST:
-            resp = r.post(
-                graphdb_url,
-                data=update_query,
-                headers=headers,
-                auth=auth,
-                timeout=300,
-                verify=False,
-                proxies=PROXIES,
-            )
-        else:
-            resp = r.post(
-                graphdb_url,
-                data=update_query,
-                headers=headers,
-                auth=auth,
-                timeout=300,
-            )
+        # TODO Sergiy: retry mechanism in decorator and use it instead of copy-pasting the same code
+        retries = 10
 
-        resp.raise_for_status()
+        for attempt in range(1, retries + 1):
+            try:
+                if DEBUG_LOCAL_TEST:
+                    resp = r.post(
+                        graphdb_url,
+                        data=update_query,
+                        headers=headers,
+                        auth=auth,
+                        timeout=300,
+                        verify=False,
+                        proxies=PROXIES,
+                    )
+                else:
+                    resp = r.post(
+                        graphdb_url,
+                        data=update_query,
+                        headers=headers,
+                        auth=auth,
+                        timeout=300,
+                    )
+
+                resp.raise_for_status()
+                break
+
+            except Exception as e:
+                if attempt == retries:
+                    raise
+                sleep(random.uniform(1, 2))
 
     @staticmethod
     def graphdb_upload_ttl(file_path, graph_uri):
