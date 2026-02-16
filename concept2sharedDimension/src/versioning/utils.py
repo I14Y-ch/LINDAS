@@ -261,13 +261,27 @@ class LindasAPIHelper:
             "User-Agent": I14Y_USER_AGENT,
         }
 
-        if DEBUG_LOCAL_TEST:
-            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=False, proxies=PROXIES)
-        else:
-            resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=True)
-        resp.raise_for_status()
-        data = resp.json()
-        results = data.get("results", {}).get("bindings", [])
+        # TODO Sergiy: retry mechanism in decorator and use it instead of copy-pasting the same code
+        retries = 10
+
+        for attempt in range(1, retries + 1):
+            try:
+                if DEBUG_LOCAL_TEST:
+                    resp = r.post(
+                        url, data={"query": query}, headers=headers, timeout=300, verify=False, proxies=PROXIES
+                    )
+                else:
+                    resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=True)
+                resp.raise_for_status()
+                break
+
+            except Exception as e:
+                if attempt == retries:
+                    raise
+                sleep(random.uniform(1, 2))
+
+            data = resp.json()
+            results = data.get("results", {}).get("bindings", [])
 
         return results
 
