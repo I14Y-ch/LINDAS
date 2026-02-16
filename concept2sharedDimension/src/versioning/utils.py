@@ -280,8 +280,8 @@ class LindasAPIHelper:
                     raise
                 sleep(random.uniform(1, 2))
 
-            data = resp.json()
-            results = data.get("results", {}).get("bindings", [])
+        data = resp.json()
+        results = data.get("results", {}).get("bindings", [])
 
         return results
 
