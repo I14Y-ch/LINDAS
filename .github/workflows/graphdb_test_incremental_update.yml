@@ -1,8 +1,8 @@
-name: "[TEST] Incremental Update"
+name: "[GRAPHDB TEST] Incremental Update"
 
 on:
-  # schedule:
-  #   - cron: "0 6 * * *"
+  schedule:
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       STATUSES:
@@ -15,10 +15,10 @@ jobs:
     uses: ./.github/workflows/reusable_workflow.yml
     with:
       CLEAR_GRAPH: false
-      LINDAS_UPDATE_URL: "https://stardog-test.cluster.ldbar.ch/lindas"
-      LINDAS_QUERY_URL: "https://test.lindas.admin.ch/query"
+      LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas"
+      LINDAS_QUERY_URL: "https://lindas.test.cz-aws.net/query"
       BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
       STATUSES: ${{ inputs.STATUSES || 'Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded' }}
     secrets:
-      STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_TEST }}
-      STARDOG_USER: ${{ secrets.STARDOG_USER }}
+      STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }} # The credentials for GraphDB TEST are the same as for INT
+      STARDOG_USER: ${{ secrets.GRAPHDB_USER }} # The credentials for GraphDB TEST are the same as for INT
