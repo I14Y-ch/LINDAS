@@ -258,7 +258,9 @@ class CatalogManager:
         self.vm.graph.add((catalog_uri, RDFA.uri, URIRef("https://register.ld.admin.ch/i14y/")))
         # self.vm.graph.add((catalog_uri, SDO.includedInDataCatalog, void_uri)) not used in LINDAS at the moment
 
-        # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
+        self.vm.graph.add(
+            (catalog_uri, SKOS.prefLabel, Literal("Data published on register.ld.admin.ch/i14y", lang="en"))
+        )
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
         self.vm.graph.add((catalog_uri, SDO.name, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
         # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("This catalog contains data from I14Y. Specifically, it contains I14Y concepts made available as linked data.", lang="en")))
@@ -273,7 +275,9 @@ class CatalogManager:
             )
         )
 
-        # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr")))
+        self.vm.graph.add(
+            (catalog_uri, SKOS.prefLabel, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr"))
+        )
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr")))
         self.vm.graph.add(
             (catalog_uri, SDO.name, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr"))
@@ -290,7 +294,9 @@ class CatalogManager:
             )
         )
 
-        # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
+        self.vm.graph.add(
+            (catalog_uri, SKOS.prefLabel, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it"))
+        )
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
         self.vm.graph.add((catalog_uri, SDO.name, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
         # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Questo catalogo contiene dati da I14Y. Specificamente, contiene concetti I14Y resi disponibili come linked data.", lang="it")))
@@ -305,7 +311,9 @@ class CatalogManager:
             )
         )
 
-        # self.vm.graph.add((catalog_uri, SKOS.prefLabel, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de")))
+        self.vm.graph.add(
+            (catalog_uri, SKOS.prefLabel, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de"))
+        )
         # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de")))
         self.vm.graph.add(
             (catalog_uri, SDO.name, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de"))
@@ -389,7 +397,7 @@ class CodeListManager:
 
         for lang, title in level_title.items():
             if is_valid_value(title):
-                # self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
+                self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
                 self.vm.graph.add((level_uri, SDO.name, Literal(title, lang=lang)))
 
     def _process_entry(self, entry, concept_data, ontology_uri, all_uri, is_version):
@@ -451,7 +459,7 @@ class CodeListManager:
         self.vm.graph.add((entry_uri, XKOS.level, level_uri))
         # self.vm.graph.add((level_uri, XKOS.contains, entry_uri))
         self.vm.graph.add((level_uri, SDO.member, entry_uri))
-        # self.vm.graph.add((level_uri, SKOS.member, entry_uri))
+        self.vm.graph.add((level_uri, SKOS.member, entry_uri))
 
         self._add_entry_metadata(entry_uri, entry, ontology_uri, all_uri, is_version)
 
@@ -460,8 +468,8 @@ class CodeListManager:
         else:
             # If no parent, link to the all_uri as top concept
             self.vm.graph.add((entry_uri, SKOS.topConceptOf, ontology_uri))
-            # self.vm.graph.add((entry_uri, SKOS.broader, all_uri))
-            # self.vm.graph.add((all_uri, SKOS.narrower, entry_uri))
+            self.vm.graph.add((entry_uri, SKOS.broader, all_uri))
+            self.vm.graph.add((all_uri, SKOS.narrower, entry_uri))
             self.vm.graph.add((entry_uri, SDO.isPartOf, all_uri))
             self.vm.graph.add((all_uri, SDO.hasPart, entry_uri))
 
@@ -483,32 +491,32 @@ class CodeListManager:
 
     def _add_entry_metadata(self, entry_uri, entry, ontology_uri, all_uri, is_version):
         """Add all metadata for a single entry"""
-        # self.vm.graph.add((entry_uri, RDF.type, SKOS.Concept))
+        self.vm.graph.add((entry_uri, RDF.type, SKOS.Concept))
         self.vm.graph.add((entry_uri, RDF.type, SDO.DefinedTerm))
         self.vm.graph.add((entry_uri, RDF.type, vl.Version if is_version else vl.Identity))
 
-        # self.vm.graph.add((entry_uri, SKOS.inScheme, ontology_uri))
+        self.vm.graph.add((entry_uri, SKOS.inScheme, ontology_uri))
         self.vm.graph.add((entry_uri, SDO.inDefinedTermSet, ontology_uri))
         self.vm.graph.add((ontology_uri, SDO.hasDefinedTerm, entry_uri))
         self.vm.graph.add((all_uri, SDO.member, entry_uri))
-        # self.vm.graph.add((all_uri, SKOS.member, entry_uri))
+        self.vm.graph.add((all_uri, SKOS.member, entry_uri))
 
         for lang, name in entry["name"].items():
             if is_valid_value(name):
-                # self.vm.graph.add((entry_uri, SKOS.prefLabel, Literal(name, lang=lang)))
+                self.vm.graph.add((entry_uri, SKOS.prefLabel, Literal(name, lang=lang)))
                 self.vm.graph.add((entry_uri, SDO.name, Literal(name, lang=lang)))
                 # self.vm.graph.add((entry_uri, DCTERMS.title, Literal(name, lang=lang)))
 
         self.vm.graph.add((entry_uri, SDO.identifier, Literal(entry["code"])))
-        # self.vm.graph.add((entry_uri, SKOS.notation, Literal(entry['code'])))
+        self.vm.graph.add((entry_uri, SKOS.notation, Literal(entry["code"])))
         # self.vm.graph.add((entry_uri, DCTERMS.identifier, Literal(entry['code'])))
-        # self.vm.graph.add((entry_uri, SDO.termCode, Literal(entry['code'])))
+        self.vm.graph.add((entry_uri, SDO.termCode, Literal(entry["code"])))
 
         for lang, desc in entry.get("description", {}).items():
             if is_valid_value(desc):
                 self.vm.graph.add((entry_uri, SDO.description, Literal(desc, lang=lang)))
                 # self.vm.graph.add((entry_uri, DCTERMS.description, Literal(desc, lang=lang)))
-                # self.vm.graph.add((entry_uri, SKOS.definition, Literal(desc, lang=lang)))
+                self.vm.graph.add((entry_uri, SKOS.definition, Literal(desc, lang=lang)))
 
     def _handle_parent_relationship(self, entry, concept_data, entry_uri, is_version):
         """Handle parent-child relationships between entries"""
@@ -518,10 +526,10 @@ class CodeListManager:
             parent_uri = self.vm.create_uri(concept_data["identifier"], entry["parentCode"])
 
         relationships = [
-            # (entry_uri, SKOS.broader, parent_uri),
+            (entry_uri, SKOS.broader, parent_uri),
             (entry_uri, SDO.isPartOf, parent_uri),
             # (entry_uri, XKOS.isPartOf, parent_uri),
-            # (parent_uri, SKOS.narrower, entry_uri),
+            (parent_uri, SKOS.narrower, entry_uri),
             (parent_uri, SDO.hasPart, entry_uri),
             # (parent_uri, XKOS.hasPart, entry_uri)
         ]
@@ -581,7 +589,7 @@ class CodeListManager:
             # Add title if present
             title = annotation.get("title")
             if is_valid_value(title):
-                # self.vm.graph.add((body_node, SKOS.prefLabel, Literal(title)))
+                self.vm.graph.add((body_node, SKOS.prefLabel, Literal(title)))
                 # self.vm.graph.add((body_node, DCTERMS.title, Literal(title)))
                 self.vm.graph.add((body_node, SDO.name, Literal(title)))
 
@@ -611,7 +619,7 @@ class ConceptMetadataManager:
         # We specify if we're dealing with the identity or version graph, which changes the skolemized BNode URIs
         self.vm.set_is_version(is_version if is_version else False)
 
-        # self.vm.graph.add((uri, RDF.type, SKOS.ConceptScheme))
+        self.vm.graph.add((uri, RDF.type, SKOS.ConceptScheme))
         self.vm.graph.add((uri, RDF.type, SDO.DefinedTermSet))
         # self.vm.graph.add((uri, RDF.type, CUBELINK.SharedDimension))     # uncomment this line to define Concepts as Shared Dimensions
         self.vm.graph.add((uri, RDF.type, vl.Version if is_version else vl.Identity))
@@ -642,7 +650,7 @@ class ConceptMetadataManager:
                 modified_names[lang] = f"{name}{suffix}"
                 for lang, name in modified_names.items():
                     if name and str(name).strip():
-                        # self.vm.graph.add((uri, SKOS.prefLabel, Literal(name, lang=lang)))
+                        self.vm.graph.add((uri, SKOS.prefLabel, Literal(name, lang=lang)))
                         self.vm.graph.add((uri, SDO.name, Literal(name, lang=lang)))
                         # self.vm.graph.add((uri, DCTERMS.title, Literal(name, lang=lang)))
 
@@ -650,7 +658,7 @@ class ConceptMetadataManager:
             if is_valid_value(desc):
                 self.vm.graph.add((uri, SDO.description, Literal(desc, lang=lang)))
                 # self.vm.graph.add((uri, DCTERMS.description, Literal(desc, lang=lang)))
-                # self.vm.graph.add((uri, SKOS.definition, Literal(desc, lang=lang)))
+                self.vm.graph.add((uri, SKOS.definition, Literal(desc, lang=lang)))
 
         if concept_data.get("keywords"):
             for keyword_dict in concept_data["keywords"]:
@@ -689,7 +697,7 @@ class ConceptMetadataManager:
 
         for lang, theme_name in theme["name"].items():
             if is_valid_value(theme_name):
-                # self.vm.graph.add((theme_bnode, SKOS.prefLabel, Literal(theme_name, lang=lang)))
+                self.vm.graph.add((theme_bnode, SKOS.prefLabel, Literal(theme_name, lang=lang)))
                 self.vm.graph.add((theme_bnode, SDO.name, Literal(theme_name, lang=lang)))
 
         self.vm.graph.add((concept_uri, DCTERMS.subject, theme_bnode))
@@ -706,7 +714,7 @@ class ConceptMetadataManager:
             if "label" in conformsTo_dict:
                 for lang, name in conformsTo_dict["label"].items():
                     if is_valid_value(name):
-                        # self.vm.graph.add((conformTo_bnode, SKOS.prefLabel, Literal(name, lang=lang)))
+                        self.vm.graph.add((conformTo_bnode, SKOS.prefLabel, Literal(name, lang=lang)))
                         self.vm.graph.add((conformTo_bnode, SDO.name, Literal(name, lang=lang)))
 
             self.vm.graph.add((concept_uri, DCTERMS.conformsTo, conformTo_bnode))
@@ -746,7 +754,7 @@ class ConceptMetadataManager:
         )
 
         self.vm.graph.add((hierarchy, SDO.name, Literal(hierarchy_name)))
-        # self.vm.graph.add((hierarchy, SKOS.prefLabel, Literal(hierarchy_name)))
+        self.vm.graph.add((hierarchy, SKOS.prefLabel, Literal(hierarchy_name)))
         self.vm.graph.add((hierarchy, CUBELINK.hierarchyRoot, all_uri))
 
         if level_depths:
@@ -790,7 +798,7 @@ class ConceptMetadataManager:
 
                 for lang, title in level["title"].items():
                     if is_valid_value(title):
-                        # self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
+                        self.vm.graph.add((level_uri, SKOS.prefLabel, Literal(title, lang=lang)))
                         self.vm.graph.add((level_uri, SDO.name, Literal(title, lang=lang)))
 
                 for entry in levels_dict.get(level["depth"], []):
@@ -802,7 +810,7 @@ class ConceptMetadataManager:
                         entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
 
                     self.vm.graph.add((level_uri, SDO.member, entry_uri))
-                    # self.vm.graph.add((level_uri, SKOS.member, entry_uri))
+                    self.vm.graph.add((level_uri, SKOS.member, entry_uri))
 
                 if previous_level_uri and (is_version == ("version" in str(previous_level_uri))):
                     self.vm.graph.add((previous_level_uri, CUBELINK.nextInHierarchy, level_uri))
