@@ -1,4 +1,4 @@
-name: "[PROD] Incremental Update"
+name: "[PROD] update with clear graph before"
 
 on:
   workflow_dispatch:
