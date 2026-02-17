@@ -2,7 +2,7 @@ name: "[PROD] Incremental Update"
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 3 * * 1-5"
   workflow_dispatch:
     inputs:
       STATUSES:
