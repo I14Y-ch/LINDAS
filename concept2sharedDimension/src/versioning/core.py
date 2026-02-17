@@ -510,7 +510,7 @@ class CodeListManager:
         self.vm.graph.add((entry_uri, SDO.identifier, Literal(entry["code"])))
         self.vm.graph.add((entry_uri, SKOS.notation, Literal(entry["code"])))
         # self.vm.graph.add((entry_uri, DCTERMS.identifier, Literal(entry['code'])))
-        self.vm.graph.add((entry_uri, SDO.termCode, Literal(entry["code"])))
+        # self.vm.graph.add((entry_uri, SDO.termCode, Literal(entry["code"])))
 
         for lang, desc in entry.get("description", {}).items():
             if is_valid_value(desc):
