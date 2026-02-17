@@ -1,8 +1,6 @@
 name: "[GRAPHDB PROD] update with clear graph before"
 
 on:
-  schedule:
-    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       STATUSES:

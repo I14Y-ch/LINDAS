@@ -1,7 +1,12 @@
-name: "[PROD] update with clear graph before"
+name: "[PROD] Incremental Update"
 
 on:
   workflow_dispatch:
+    inputs:
+      STATUSES:
+        description: "Status list to import from i14y (comma separated string)"
+        required: true
+        default: "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded"
 
 jobs:
   update-concepts:
@@ -11,6 +16,7 @@ jobs:
       LINDAS_UPDATE_URL: "https://stardog.cluster.ldbar.ch/lindas"
       LINDAS_QUERY_URL: "https://lindas.admin.ch/query"
       BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
+      STATUSES: ${{ inputs.STATUSES || 'Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded' }}
     secrets:
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }}
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
