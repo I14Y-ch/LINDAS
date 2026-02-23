@@ -51,7 +51,7 @@ QUDT = Namespace("https://qudt.org/schema/qudt/")
 vl = Namespace("https://version.link/")
 oa = Namespace("https://www.w3.org/ns/oa#")
 dataCite = Namespace("https://datacite-metadata-schema.readthedocs.io/en/4.6/appendices/appendix-1/relationType/#")
-ADMS = Namespace("https://www.w3.org/TR/vocab-adms/#adms_")
+ADMS = Namespace("http://www.w3.org/ns/adms#")
 RDFA = Namespace("https://www.w3.org/ns/rdfa#")
 PAV = Namespace("http://purl.org/pav/")
 

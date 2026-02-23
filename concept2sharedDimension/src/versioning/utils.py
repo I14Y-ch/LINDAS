@@ -389,7 +389,7 @@ class LindasAPIHelper:
         if concept_identifier not in LindasAPIHelper.lindas_concept_attributes.keys():
             query = f"""
 PREFIX schema: <http://schema.org/>
-PREFIX adms: <https://www.w3.org/TR/vocab-adms/#adms_>
+PREFIX adms: <http://www.w3.org/ns/adms#>
 PREFIX pav: <http://purl.org/pav/>
 PREFIX vl: <https://version.link/>
 
