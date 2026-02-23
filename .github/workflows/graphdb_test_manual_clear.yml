@@ -1,4 +1,4 @@
-name: "[GRAPHDB TEST] update with clear graph before""
+name: "[GRAPHDB TEST] update with clear graph before"
 
 on:
   schedule:
