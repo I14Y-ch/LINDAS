@@ -694,9 +694,10 @@ class I14YAPIHelper:
             version = concept_version["version"]
             if version not in version_codes_dict.keys():
                 version_codes_dict[version] = set()
-            for codeListEntry in concept_version["codeListEntries"]:
-                code = codeListEntry["code"]
-                version_codes_dict[version].add(code)
+            if "codeListEntries" in concept_version.keys():
+                for codeListEntry in concept_version["codeListEntries"]:
+                    code = codeListEntry["code"]
+                    version_codes_dict[version].add(code)
         return version_codes_dict
 
     @staticmethod
