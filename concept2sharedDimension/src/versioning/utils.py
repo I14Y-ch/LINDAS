@@ -80,7 +80,7 @@ class LindasAPIHelper:
                         data=update_query,
                         headers=headers,
                         auth=auth,
-                        timeout=300,
+                        timeout=60,
                         verify=False,
                         proxies=PROXIES,
                     )
@@ -90,7 +90,7 @@ class LindasAPIHelper:
                         data=update_query,
                         headers=headers,
                         auth=auth,
-                        timeout=300,
+                        timeout=60,
                     )
 
                 resp.raise_for_status()
@@ -279,10 +279,10 @@ class LindasAPIHelper:
             try:
                 if DEBUG_LOCAL_TEST:
                     resp = r.post(
-                        url, data={"query": query}, headers=headers, timeout=300, verify=False, proxies=PROXIES
+                        url, data={"query": query}, headers=headers, timeout=60, verify=False, proxies=PROXIES
                     )
                 else:
-                    resp = r.post(url, data={"query": query}, headers=headers, timeout=300, verify=True)
+                    resp = r.post(url, data={"query": query}, headers=headers, timeout=60, verify=True)
                 resp.raise_for_status()
                 break
 
