@@ -9,7 +9,7 @@ jobs:
     with:
       CLEAR_GRAPH: true
       LINDAS_UPDATE_URL: "https://int.graphdb.lindas.admin.ch/repositories/lindas/statements"
-      LINDAS_QUERY_URL: "https://int.graphdb.lindas.admin.ch/repositories/lindas"
+      LINDAS_QUERY_URL: "https://int.lindas.admin.ch/query"
       BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
       STATUSES: "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded"
     secrets:
