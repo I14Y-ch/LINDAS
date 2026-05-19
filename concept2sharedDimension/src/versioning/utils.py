@@ -70,7 +70,7 @@ class LindasAPIHelper:
             auth = (graphdb_user, graphdb_password)
 
         # TODO Sergiy: retry mechanism in decorator and use it instead of copy-pasting the same code
-        retries = 2
+        retries = 1
 
         for attempt in range(1, retries + 1):
             try:
@@ -80,7 +80,7 @@ class LindasAPIHelper:
                         data=update_query,
                         headers=headers,
                         auth=auth,
-                        timeout=120,
+                        timeout=300,
                         verify=False,
                         proxies=PROXIES,
                     )
@@ -90,7 +90,7 @@ class LindasAPIHelper:
                         data=update_query,
                         headers=headers,
                         auth=auth,
-                        timeout=120,
+                        timeout=300,
                     )
 
                 resp.raise_for_status()
@@ -395,7 +395,7 @@ PREFIX vl: <https://version.link/>
 
 SELECT ?version ?status ?attr ?lang ?value
 WHERE {{
-  GRAPH <https://lindas.admin.ch/fso/i14y> {{
+  GRAPH <{TARGET_GRAPH}> {{
     ?concept a schema:DefinedTermSet ;
             a vl:Version ;
              schema:identifier "{concept_identifier}" ;
