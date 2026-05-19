@@ -70,7 +70,7 @@ class LindasAPIHelper:
             auth = (graphdb_user, graphdb_password)
 
         # TODO Sergiy: retry mechanism in decorator and use it instead of copy-pasting the same code
-        retries = 10
+        retries = 2
 
         for attempt in range(1, retries + 1):
             try:
@@ -80,7 +80,7 @@ class LindasAPIHelper:
                         data=update_query,
                         headers=headers,
                         auth=auth,
-                        timeout=60,
+                        timeout=120,
                         verify=False,
                         proxies=PROXIES,
                     )
@@ -90,7 +90,7 @@ class LindasAPIHelper:
                         data=update_query,
                         headers=headers,
                         auth=auth,
-                        timeout=60,
+                        timeout=120,
                     )
 
                 resp.raise_for_status()
