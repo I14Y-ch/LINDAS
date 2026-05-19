@@ -2,6 +2,11 @@ name: "[GRAPHDB INT] update with clear graph before"
 
 on:
   workflow_dispatch:
+    inputs:
+      STATUSES:
+        description: "Status list to import from i14y (comma separated string)"
+        required: true
+        default: "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded"
 
 jobs:
   update-concepts:

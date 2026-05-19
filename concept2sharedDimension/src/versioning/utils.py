@@ -273,7 +273,7 @@ class LindasAPIHelper:
         }
 
         # TODO Sergiy: retry mechanism in decorator and use it instead of copy-pasting the same code
-        retries = 10
+        retries = 1
 
         for attempt in range(1, retries + 1):
             try:
