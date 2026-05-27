@@ -445,21 +445,11 @@ WHERE {{
     @staticmethod
     def delete_concept(concept_identifier):
         print(f"DEBUG: delete_concept concept {concept_identifier}")
-        # The regex is the simpliest way to select ALL that is linked to a given concept, if we begin to list all the predicates that links BNodes etc. the query is even more slow
-        # ?concept a schema:DefinedTermSet;
-        #      schema:identifier "nogaCode" .
-        # ?code a schema:DefinedTerm;
-        #     schema:inDefinedTermSet ?concept.
-        # OPTIONAL {?concept schema:hasPart ?annotation_node.}
-        # OPTIONAL {?annotation_node oa:hasBody ?body_node.}
-        # OPTIONAL {?concept shacl:property ?shacl_property.}
-        # OPTIONAL {?concept dcterms:subject ?theme_bnode.}
-        # OPTIONAL {?concept dcterms:conformsTo ?conformTo_bnode.}
-        # OPTIONAL {?concept cubelink:inHierarchy ?hierarchy.}
-        # Then we get all ?s ?p ?o where ?s or ?o is any of the selected nodes above
-        # But with this method, it takes way too much time or it crashes even
-        # So we keep it simple:
-        delete_query = f"""
+        # Keep strict concept boundary semantics to avoid matching identifiers like
+        # "aaaBBB" when deleting "aaa": match exactly BASE_URI/{id} or BASE_URI/{id}/...
+        concept_base = f"{BASE_URI}{concept_identifier}"
+
+        delete_subject_query = f"""
 DELETE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
@@ -469,14 +459,36 @@ WHERE {{
     GRAPH <{TARGET_GRAPH}> {{
         ?s ?p ?o .
         FILTER (
-            (REGEX(STR(?s), "^{BASE_URI}{concept_identifier}(/|$)")) ||
-            (REGEX(STR(?o), "^{BASE_URI}{concept_identifier}(/|$)"))
+            isIRI(?s) && (
+                STR(?s) = "{concept_base}" ||
+                STRSTARTS(STR(?s), "{concept_base}/")
+            )
         )
     }}
 }}
 """
 
-        LindasAPIHelper.graphdb_update(delete_query)
+        delete_object_query = f"""
+DELETE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+    }}
+}}
+WHERE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+        FILTER (
+            isIRI(?o) && (
+                STR(?o) = "{concept_base}" ||
+                STRSTARTS(STR(?o), "{concept_base}/")
+            )
+        )
+    }}
+}}
+"""
+
+        LindasAPIHelper.graphdb_update(delete_subject_query)
+        LindasAPIHelper.graphdb_update(delete_object_query)
 
 
 class I14YAPIHelper:
