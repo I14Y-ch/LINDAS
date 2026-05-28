@@ -450,42 +450,6 @@ WHERE {{
         print(f"DEBUG: delete_concept concept {concept_identifier}")
         concept_base = f"{BASE_URI}{concept_identifier}"
 
-        # Split deletion by URI families, but keep old semantics by matching both subject and object.
-        delete_steps = [
-            (
-                "concept-identity",
-                f'isIRI(__NODE__) && STR(__NODE__) = "{concept_base}"',
-            ),
-            (
-                "concept-versions",
-                f'isIRI(__NODE__) && STRSTARTS(STR(__NODE__), "{concept_base}/version/")',
-            ),
-            (
-                "all-root",
-                f'isIRI(__NODE__) && STR(__NODE__) = "{concept_base}/all"',
-            ),
-            (
-                "all-versions",
-                f'isIRI(__NODE__) && STRSTARTS(STR(__NODE__), "{concept_base}/all/version/")',
-            ),
-            (
-                "levels",
-                f'isIRI(__NODE__) && STRSTARTS(STR(__NODE__), "{concept_base}/level_")',
-            ),
-            (
-                "skolem",
-                f'isIRI(__NODE__) && STRSTARTS(STR(__NODE__), "{concept_base}/.well-known/genid/")',
-            ),
-            (
-                "codes-and-code-versions",
-                f'isIRI(__NODE__) && STRSTARTS(STR(__NODE__), "{concept_base}/") '
-                f'&& !STRSTARTS(STR(__NODE__), "{concept_base}/version/") '
-                f'&& !STRSTARTS(STR(__NODE__), "{concept_base}/all") '
-                f'&& !STRSTARTS(STR(__NODE__), "{concept_base}/level_") '
-                f'&& !STRSTARTS(STR(__NODE__), "{concept_base}/.well-known/")',
-            ),
-        ]
-
         def build_delete_query(filter_expression):
             return f"""
 DELETE {{
@@ -502,10 +466,12 @@ WHERE {{
 """
 
         for node_var, node_name in (("?o", "object"), ("?s", "subject")):
-            for step_name, step_filter in delete_steps:
-                node_filter = step_filter.replace("__NODE__", node_var)
-                print(f"DEBUG: delete_concept side={node_name} step={step_name} concept={concept_identifier}")
-                LindasAPIHelper.graphdb_update(build_delete_query(node_filter))
+            node_filter = (
+                f'isIRI({node_var}) && '
+                f'(STR({node_var}) = "{concept_base}" || STRSTARTS(STR({node_var}), "{concept_base}/"))'
+            )
+            print(f"DEBUG: delete_concept side={node_name} concept={concept_identifier}")
+            LindasAPIHelper.graphdb_update(build_delete_query(node_filter))
 
 
 class I14YAPIHelper:
@@ -634,12 +600,12 @@ class I14YAPIHelper:
         concept_sizes = [(cid, len(data.get("codeListEntries", []))) for cid, data in all_concept_data.items()]
 
         # 5. Set n_batches so that no batch is bigger than the biggest codeListEntries
-        # and cap workflow parallelism via MAX_BATCHES (default: 4).
+        # and cap workflow parallelism via MAX_BATCHES (default: 3).
         max_entries = max(len(data.get("codeListEntries", [])) for _, data in all_concept_data.items())
         total_entries = sum(len(data.get("codeListEntries", [])) for _, data in all_concept_data.items())
         n_batches = max(1, total_entries // max_entries)
 
-        max_batches = int(os.environ.get("MAX_BATCHES", "4"))
+        max_batches = int(os.environ.get("MAX_BATCHES", "3"))
         max_batches = max(1, max_batches)
         n_batches = min(n_batches, max_batches, max(1, len(concept_sizes)))
 
