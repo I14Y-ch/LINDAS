@@ -634,9 +634,14 @@ class I14YAPIHelper:
         concept_sizes = [(cid, len(data.get("codeListEntries", []))) for cid, data in all_concept_data.items()]
 
         # 5. Set n_batches so that no batch is bigger than the biggest codeListEntries
+        # and cap workflow parallelism via MAX_BATCHES (default: 4).
         max_entries = max(len(data.get("codeListEntries", [])) for _, data in all_concept_data.items())
         total_entries = sum(len(data.get("codeListEntries", [])) for _, data in all_concept_data.items())
         n_batches = max(1, total_entries // max_entries)
+
+        max_batches = int(os.environ.get("MAX_BATCHES", "4"))
+        max_batches = max(1, max_batches)
+        n_batches = min(n_batches, max_batches, max(1, len(concept_sizes)))
 
         # 6. Initialize min-heap for Largest Differencing
         # Each heap element: (current_sum, batch_index, list_of_ids)
