@@ -69,8 +69,11 @@ class LindasAPIHelper:
         if graphdb_user and graphdb_password:
             auth = (graphdb_user, graphdb_password)
 
-        # Remote endpoints can close long-running update requests.
-        retries = 3
+        # Keep retries configurable: CI can set it to 1 to fail fast.
+        retries = int(os.environ.get("GRAPHDB_UPDATE_RETRIES", "1"))
+        retries = max(1, retries)
+        backoff_min = float(os.environ.get("GRAPHDB_UPDATE_BACKOFF_MIN", "0.5"))
+        backoff_max = float(os.environ.get("GRAPHDB_UPDATE_BACKOFF_MAX", "1.5"))
 
         for attempt in range(1, retries + 1):
             try:
@@ -99,7 +102,7 @@ class LindasAPIHelper:
             except Exception as e:
                 if attempt == retries:
                     raise
-                sleep(random.uniform(1.5, 4.0))
+                sleep(random.uniform(backoff_min, backoff_max))
 
     @staticmethod
     def graphdb_upload_ttl(file_path, graph_uri):
