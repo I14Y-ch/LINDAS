@@ -108,7 +108,7 @@ jobs:
     if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix: ${{ fromJSON(needs.get-concepts.outputs.batch_matrix) }}
 
     steps:
