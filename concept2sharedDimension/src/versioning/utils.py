@@ -535,13 +535,13 @@ class I14YAPIHelper:
                     if c.get("id") in EXCLUDED_IDS:
                         continue
 
-                    identifier = c.get("identifier")
+                    identifier = c.get("identifiers")[0]
                     version = c.get("version")
 
                     filtered.append(c)
 
                 for i, concept in enumerate(filtered, printed_count + 1):
-                    print(f"{i}. Identifier: {concept.get('identifier')}")
+                    print(f"{i}. Identifier: {concept.get('identifiers')[0]}")
                     print(f"   Title: {concept.get('name')}")
                     print(f"   Status: {concept.get('registrationStatus')}")
                     print(f"   Version: {concept.get('version')}\n")

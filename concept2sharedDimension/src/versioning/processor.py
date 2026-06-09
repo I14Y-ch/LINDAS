@@ -150,7 +150,7 @@ class VersionProcessor:
         if concept_meta is None:
             raise ValueError(f"Concept {concept_id} could not be retrieved")
 
-        concept_identifier = concept_meta["data"].get("identifier")
+        concept_identifier = concept_meta["data"].get("identifiers")[0]
         version_data = I14YAPIHelper.get_version_list(concept_identifier)
         if not version_data:
             print(f"Skipping concept {concept_identifier}, no version data")
