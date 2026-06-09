@@ -29,7 +29,7 @@ def delete_orphaned_concepts_lindas():
     lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
 
     concepts_to_delete_identifiers = set(lindas_concept_versions.keys()) - set(
-        [c["identifier"] for c in I14YAPIHelper.get_all_concepts()]
+        [c["identifiers"][0] for c in I14YAPIHelper.get_all_concepts()]
     )
 
     for concept_identifier in concepts_to_delete_identifiers:
@@ -563,14 +563,14 @@ class I14YAPIHelper:
             # We get only the latest concept version from i14y because we will get all the versions for each concept afterwards anyway
             latest_concepts = {}
             for concept in all_concepts:
-                identifier = concept["identifier"]
+                identifier = concept["identifiers"][0]
                 valid_from = concept["validFrom"]
 
                 if identifier not in latest_concepts or valid_from > latest_concepts[identifier]["validFrom"]:
                     latest_concepts[identifier] = concept
 
             for concept in all_concepts:
-                concept_identifier = concept["identifier"]
+                concept_identifier = concept["identifiers"][0]
                 if concept["id"] == latest_concepts[concept_identifier]["id"]:
                     # local_id_concepts_map is used to store only the latest version of a concept, by id
                     I14YAPIHelper.local_id_concepts_map[concept["id"]] = concept

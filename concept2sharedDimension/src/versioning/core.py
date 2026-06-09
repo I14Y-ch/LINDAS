@@ -365,9 +365,9 @@ class CodeListManager:
     #     """Create the top-level 'All' classification level"""
     #     self.vm.set_is_version(is_version)
     #     if is_version:
-    #         all_uri = self.vm.create_uri(concept_data['identifier'], "all", concept_data['version'])
+    #         all_uri = self.vm.create_uri(concept_data['identifiers'][0], "all", concept_data['version'])
     #     else:
-    #         all_uri = self.vm.create_uri(concept_data['identifier'], "all")
+    #         all_uri = self.vm.create_uri(concept_data['identifiers'][0], "all")
 
     #     self.vm.graph.add((all_uri, RDF.type, XKOS.ClassificationLevel))
     #     self.vm.graph.add((all_uri, SDO.inDefinedTermSet, ontology_uri))
@@ -378,9 +378,9 @@ class CodeListManager:
     #     self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
 
     #     hierarchy_name = (
-    #         f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}"
+    #         f"Version Hierarchy - {concept_data['identifiers'][0]} v{concept_data['version']}"
     #         if is_version else
-    #         f"Identity Hierarchy - {concept_data['identifier']}"
+    #         f"Identity Hierarchy - {concept_data['identifiers'][0]}"
     #     )
 
     #     # self.vm.graph.add((hierarchy, SKOS.prefLabel, Literal(hierarchy_name)))
@@ -404,13 +404,13 @@ class CodeListManager:
         """Process entry with version-identity handling and level management"""
         self.vm.set_is_version(is_version)
         if is_version:
-            entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"], concept_data["version"])
+            entry_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["code"], concept_data["version"])
 
-            identity_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
+            identity_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["code"])
             # self.vm.graph.add((entry_uri, vl.identity, identity_uri))
             # self.vm.graph.add((identity_uri, vl.version, entry_uri))
         else:
-            entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
+            entry_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["code"])
 
         if (not is_version) and hasattr(self.vm, "deleted_entries") and entry["code"] in self.vm.deleted_entries:
             return
@@ -419,9 +419,9 @@ class CodeListManager:
         self.level_depths[entry["code"]] = level_depth
 
         if is_version:
-            level_uri = self.vm.create_uri(concept_data["identifier"], f"level_{level_depth}", concept_data["version"])
+            level_uri = self.vm.create_uri(concept_data["identifiers"][0], f"level_{level_depth}", concept_data["version"])
         else:
-            level_uri = self.vm.create_uri(concept_data["identifier"], f"level_{level_depth}")
+            level_uri = self.vm.create_uri(concept_data["identifiers"][0], f"level_{level_depth}")
 
         self.levels_dict.setdefault(level_depth, []).append(entry)
 
@@ -521,9 +521,9 @@ class CodeListManager:
     def _handle_parent_relationship(self, entry, concept_data, entry_uri, is_version):
         """Handle parent-child relationships between entries"""
         if is_version:
-            parent_uri = self.vm.create_uri(concept_data["identifier"], entry["parentCode"], concept_data["version"])
+            parent_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["parentCode"], concept_data["version"])
         else:
-            parent_uri = self.vm.create_uri(concept_data["identifier"], entry["parentCode"])
+            parent_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["parentCode"])
 
         relationships = [
             (entry_uri, SKOS.broader, parent_uri),
@@ -631,8 +631,8 @@ class ConceptMetadataManager:
         self.vm.graph.add((uri, SHACL.property, shacl_property))
         self.vm.graph.add((shacl_property, QUDT.scaleType, URIRef("http://qudt.org/schema/qudt/Nominal")))
 
-        # self.vm.graph.add((uri, DCTERMS.identifier, Literal(concept_data["identifier"])))
-        self.vm.graph.add((uri, SDO.identifier, Literal(concept_data["identifier"])))
+        # self.vm.graph.add((uri, DCTERMS.identifier, Literal(concept_data["identifiers"][0])))
+        self.vm.graph.add((uri, SDO.identifier, Literal(concept_data["identifiers"][0])))
 
         self.vm.graph.add((uri, SDO.validFrom, Literal(concept_data["validFrom"], datatype=XSD.date)))
         if "validTo" in concept_data:
@@ -734,9 +734,9 @@ class ConceptMetadataManager:
 
         # Create 'All' level
         if is_version:
-            all_uri = self.vm.create_uri(concept_data["identifier"], "all", concept_data["version"])
+            all_uri = self.vm.create_uri(concept_data["identifiers"][0], "all", concept_data["version"])
         else:
-            all_uri = self.vm.create_uri(concept_data["identifier"], "all")
+            all_uri = self.vm.create_uri(concept_data["identifiers"][0], "all")
 
         self.vm.graph.add((all_uri, RDF.type, XKOS.ClassificationLevel))
         self.vm.graph.add((all_uri, SDO.inDefinedTermSet, concept_uri))
@@ -748,9 +748,9 @@ class ConceptMetadataManager:
         self.vm.graph.add((hierarchy, RDF.type, CUBELINK.Hierarchy))
 
         hierarchy_name = (
-            f"Version Hierarchy - {concept_data['identifier']} v{concept_data['version']}"
+            f"Version Hierarchy - {concept_data['identifiers'][0]} v{concept_data['version']}"
             if is_version
-            else f"Identity Hierarchy - {concept_data['identifier']}"
+            else f"Identity Hierarchy - {concept_data['identifiers'][0]}"
         )
 
         self.vm.graph.add((hierarchy, SDO.name, Literal(hierarchy_name)))
@@ -804,10 +804,10 @@ class ConceptMetadataManager:
                 for entry in levels_dict.get(level["depth"], []):
                     if is_version:
                         entry_uri = self.vm.create_uri(
-                            concept_data["identifier"], entry["code"], concept_data["version"]
+                            concept_data["identifiers"][0], entry["code"], concept_data["version"]
                         )
                     else:
-                        entry_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
+                        entry_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["code"])
 
                     self.vm.graph.add((level_uri, SDO.member, entry_uri))
                     self.vm.graph.add((level_uri, SKOS.member, entry_uri))

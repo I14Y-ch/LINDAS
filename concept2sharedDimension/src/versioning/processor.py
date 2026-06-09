@@ -64,7 +64,7 @@ class VersionProcessor:
             concept_versions = {}
 
             def fetch_versions(concept):
-                identifier = concept["identifier"]
+                identifier = concept["identifiers"][0]
                 # We use get_lindas_code_versions in thread, it's ok because 2 threads never process the same identifier
                 LindasAPIHelper.get_lindas_concept_attributes(identifier)
                 return concept["id"], {
@@ -80,7 +80,7 @@ class VersionProcessor:
 
             for concept in concepts:
                 concept_id = concept["id"]
-                identifier = concept["identifier"]
+                identifier = concept["identifiers"][0]
 
                 i14y_code_versions = concept_versions[concept_id]["i14y"]
 
@@ -170,7 +170,7 @@ class VersionProcessor:
         for i, current_data in enumerate(version_data):
             previous_data = version_data[i - 1] if i > 0 else None
             next_data = version_data[i + 1] if i < len(version_data) - 1 else None
-            self.vm.set_current_identifier_version(current_data["identifier"], current_data["version"])
+            self.vm.set_current_identifier_version(current_data["identifiers"][0], current_data["version"])
 
             if i == len(version_data) - 1:
                 self._process_latest_version(current_data)
@@ -183,11 +183,11 @@ class VersionProcessor:
         self, concept_data, entry, version_uri, version_all_uri, identity_uri, identity_all_uri
     ):
         """Process an entry ensuring both version and identity are created"""
-        entry_version_uri = self.vm.create_uri(concept_data["identifier"], entry["code"], concept_data["version"])
+        entry_version_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["code"], concept_data["version"])
 
         self.codelist._process_entry(entry, concept_data, version_uri, version_all_uri, is_version=True)
 
-        entry_identity_uri = self.vm.create_uri(concept_data["identifier"], entry["code"])
+        entry_identity_uri = self.vm.create_uri(concept_data["identifiers"][0], entry["code"])
         self.codelist._process_entry(entry, concept_data, identity_uri, identity_all_uri, is_version=False)
 
         if DEBUG_INCLUDE_CODE_VERSIONS:
@@ -195,8 +195,8 @@ class VersionProcessor:
 
     def _process_latest_version(self, concept_data):
         """Process latest version"""
-        identity_uri = self.vm.create_uri(concept_data["identifier"])
-        version_uri = self.vm.create_uri(concept_data["identifier"], version=concept_data["version"])
+        identity_uri = self.vm.create_uri(concept_data["identifiers"][0])
+        version_uri = self.vm.create_uri(concept_data["identifiers"][0], version=concept_data["version"])
 
         # It's useful to reset self.codelist
         self.codelist = CodeListManager(self.vm)
@@ -240,9 +240,9 @@ class VersionProcessor:
 
     def _process_older_version(self, version_data, next_version_data=None):
         """Process older version with combined codelist and concept handling"""
-        version_uri = self.vm.create_uri(version_data["identifier"], version=version_data["version"])
-        identity_uri = self.vm.create_uri(version_data["identifier"])
-        identity_all_uri = self.vm.create_uri(version_data["identifier"], "all")
+        version_uri = self.vm.create_uri(version_data["identifiers"][0], version=version_data["version"])
+        identity_uri = self.vm.create_uri(version_data["identifiers"][0])
+        identity_all_uri = self.vm.create_uri(version_data["identifiers"][0], "all")
 
         # It's useful to reset self.codelist
         self.codelist = CodeListManager(self.vm)
@@ -253,7 +253,7 @@ class VersionProcessor:
 
         # Process all entries which will populate level information
         for entry in version_data.get("codeListEntries", []):
-            entry_version_uri = self.vm.create_uri(version_data["identifier"], entry["code"], version_data["version"])
+            entry_version_uri = self.vm.create_uri(version_data["identifiers"][0], entry["code"], version_data["version"])
 
             self.codelist._process_entry(entry, version_data, version_uri, version_all_uri, is_version=True)
 
@@ -262,7 +262,7 @@ class VersionProcessor:
                     e["code"] for e in next_version_data.get("codeListEntries", [])
                 }:
                     next_entry_uri = self.vm.create_uri(
-                        version_data["identifier"], entry["code"], next_version_data["version"]
+                        version_data["identifiers"][0], entry["code"], next_version_data["version"]
                     )
                     self.vm.graph.add((entry_version_uri, vl.successor, next_entry_uri))
                     self.vm.graph.add((next_entry_uri, vl.predecessor, entry_version_uri))
@@ -275,10 +275,10 @@ class VersionProcessor:
                 deleted_entries = VersionDiff.find_deleted_entries(version_data, next_version_data)
                 for code in deleted_entries:
                     entry = next(e for e in version_data["codeListEntries"] if e["code"] == code)
-                    entry_version_uri = self.vm.create_uri(version_data["identifier"], code, version_data["version"])
+                    entry_version_uri = self.vm.create_uri(version_data["identifiers"][0], code, version_data["version"])
 
                     # Mark as deprecated in identity
-                    entry_identity_uri = self.vm.create_uri(version_data["identifier"], code)
+                    entry_identity_uri = self.vm.create_uri(version_data["identifiers"][0], code)
                     self.codelist.mark_as_deprecated(entry_identity_uri, valid_to=version_data.get("validTo"))
 
                     # Also mark last version as deprecated
@@ -289,6 +289,6 @@ class VersionProcessor:
                     self.codelist._process_entry(entry, version_data, identity_uri, identity_all_uri, is_version=False)
 
         if next_version_data:
-            next_version_uri = self.vm.create_uri(version_data["identifier"], version=next_version_data["version"])
+            next_version_uri = self.vm.create_uri(version_data["identifiers"][0], version=next_version_data["version"])
             self.vm.graph.add((version_uri, vl.successor, next_version_uri))
             self.vm.graph.add((next_version_uri, vl.predecessor, version_uri))
