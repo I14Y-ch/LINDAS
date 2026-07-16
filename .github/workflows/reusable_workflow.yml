@@ -109,6 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
+      max-parallel: 1
       matrix: ${{ fromJSON(needs.get-concepts.outputs.batch_matrix) }}
 
     steps:
