@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+import re
 from .core import ConceptMetadataManager, CodeListManager, GraphManager
 from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, timer
 from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, I14Y_MODIFIED_LOOKBACK_HOURS, MAX_WORKERS, OUTPUT_FILE_NAME, vl
@@ -20,13 +21,62 @@ class VersionProcessor:
         if not modified_at:
             return None
 
+        modified_at = modified_at.strip()
         if modified_at.endswith("Z"):
             modified_at = modified_at[:-1] + "+00:00"
+
+        def normalize_fraction(match):
+            fraction = match.group(1)[:6].ljust(6, "0")
+            return f".{fraction}"
+
+        modified_at = re.sub(r"\.(\d+)(?=(?:[+-]\d{2}:?\d{2})?$)", normalize_fraction, modified_at)
 
         parsed = datetime.fromisoformat(modified_at)
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
+
+    def _concept_needs_reimport_by_deep_comparison(self, concept):
+        identifier = concept["identifiers"][0]
+
+        i14y_code_versions = I14YAPIHelper.get_i14y_code_versions(identifier)
+        lindas_code_versions = LindasAPIHelper.get_lindas_code_versions(identifier)
+
+        if not self.i14y_concept_equal_lindas_concept(identifier):
+            print(f"DEBUG: for concept {identifier} there are differences in attributes between LINDAS and i14y")
+            return True, True
+
+        not_same_versions = set(i14y_code_versions.keys()) != set(lindas_code_versions.keys())
+        if not_same_versions:
+            print(f"DEBUG: for concept {identifier} there are different versions on LINDAS and i14y")
+
+        empty_codelist = all([len(codelist) == 0 for codelist in i14y_code_versions.values()])
+        if empty_codelist:
+            print(f"DEBUG: for concept {identifier} the codelist is empty on i14y")
+            return not_same_versions, False
+
+        if not_same_versions:
+            return True, True
+
+        nb_same_versions = 0
+        for version, codes in i14y_code_versions.items():
+            if codes != lindas_code_versions.get(version, {}):
+                print(
+                    f"DEBUG: for concept {identifier} version {version} "
+                    "there is a difference between i14y and lindas codes"
+                )
+                return True, True
+
+            print(
+                f"DEBUG: for concept {identifier} version {version} "
+                "there is no difference between i14y and lindas codes"
+            )
+            nb_same_versions += 1
+
+        if nb_same_versions == len(lindas_code_versions.keys()):
+            return False, False
+
+        return False, False
 
     def i14y_concept_equal_lindas_concept(self, identifier):
 
@@ -89,11 +139,27 @@ class VersionProcessor:
                 try:
                     modified_at = self._parse_i14y_modified_at(concept)
                 except ValueError as e:
-                    print(f"WARNING: concept {identifier} has invalid i14y system.modifiedAt and will be skipped: {e}")
+                    print(
+                        f"WARNING: concept {identifier} has invalid i14y system.modifiedAt, "
+                        f"falling back to deep comparison: {e}"
+                    )
+                    should_delete, should_process = self._concept_needs_reimport_by_deep_comparison(concept)
+                    if should_delete:
+                        concepts_to_delete_identifiers.add(identifier)
+                    if should_process:
+                        concepts_to_process.append(concept_id)
                     continue
 
                 if modified_at is None:
-                    print(f"WARNING: concept {identifier} has no i14y system.modifiedAt and will be skipped")
+                    print(
+                        f"DEBUG: concept {identifier} has no i14y system.modifiedAt, "
+                        "falling back to deep comparison"
+                    )
+                    should_delete, should_process = self._concept_needs_reimport_by_deep_comparison(concept)
+                    if should_delete:
+                        concepts_to_delete_identifiers.add(identifier)
+                    if should_process:
+                        concepts_to_process.append(concept_id)
                     continue
 
                 if modified_at >= modified_cutoff:
