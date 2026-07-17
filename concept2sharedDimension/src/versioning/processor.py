@@ -1,7 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
 from .core import ConceptMetadataManager, CodeListManager, GraphManager
 from .utils import I14YAPIHelper, LindasAPIHelper, VersionDiff, timer
-from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, MAX_WORKERS, OUTPUT_FILE_NAME, vl
+from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, I14Y_MODIFIED_LOOKBACK_HOURS, MAX_WORKERS, OUTPUT_FILE_NAME, vl
 
 
 class VersionProcessor:
@@ -12,6 +13,20 @@ class VersionProcessor:
         # self.all_entry_codes = set()
         # self.version_data = []
         self.failed_concepts = []  # Track failed concepts
+
+    @staticmethod
+    def _parse_i14y_modified_at(concept):
+        modified_at = concept.get("system", {}).get("modifiedAt")
+        if not modified_at:
+            return None
+
+        if modified_at.endswith("Z"):
+            modified_at = modified_at[:-1] + "+00:00"
+
+        parsed = datetime.fromisoformat(modified_at)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def i14y_concept_equal_lindas_concept(self, identifier):
 
@@ -54,82 +69,50 @@ class VersionProcessor:
                 concepts = [future.result()["data"] for future in as_completed(futures)]
 
         if not clear_graph:
-
+            lindas_concept_versions = LindasAPIHelper.get_lindas_concept_versions()
+            known_lindas_identifiers = set(lindas_concept_versions.keys())
+            modified_cutoff = datetime.now(timezone.utc) - timedelta(hours=I14Y_MODIFIED_LOOKBACK_HOURS)
             concepts_to_delete_identifiers = set()
+            concepts_to_process = []
 
-            concepts_unchanged = []
-
-            concepts_to_ignore = []
-
-            concept_versions = {}
-
-            def fetch_versions(concept):
-                identifier = concept["identifiers"][0]
-                # We use get_lindas_code_versions in thread, it's ok because 2 threads never process the same identifier
-                LindasAPIHelper.get_lindas_concept_attributes(identifier)
-                return concept["id"], {
-                    "i14y": I14YAPIHelper.get_i14y_code_versions(identifier),
-                    "lindas": LindasAPIHelper.get_lindas_code_versions(identifier),
-                }
-
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                futures = {executor.submit(fetch_versions, c): c for c in concepts}
-                for future in as_completed(futures):
-                    concept_id, versions = future.result()
-                    concept_versions[concept_id] = versions
+            print(f"DEBUG: incremental mode uses i14y system.modifiedAt cutoff {modified_cutoff.isoformat()}")
 
             for concept in concepts:
                 concept_id = concept["id"]
                 identifier = concept["identifiers"][0]
 
-                i14y_code_versions = concept_versions[concept_id]["i14y"]
+                if identifier not in known_lindas_identifiers:
+                    print(f"DEBUG: concept {identifier} is missing on LINDAS and will be imported")
+                    concepts_to_process.append(concept_id)
+                    continue
 
-                lindas_code_versions = concept_versions[concept_id]["lindas"]
+                try:
+                    modified_at = self._parse_i14y_modified_at(concept)
+                except ValueError as e:
+                    print(f"WARNING: concept {identifier} has invalid i14y system.modifiedAt and will be skipped: {e}")
+                    continue
 
-                if not self.i14y_concept_equal_lindas_concept(identifier):
+                if modified_at is None:
+                    print(f"WARNING: concept {identifier} has no i14y system.modifiedAt and will be skipped")
+                    continue
+
+                if modified_at >= modified_cutoff:
                     print(
-                        f"DEBUG: for concept {identifier} there are differences in attributes between LINDAS and i14y"
+                        f"DEBUG: concept {identifier} modified at {modified_at.isoformat()} "
+                        "on i14y, will be deleted and reimported"
                     )
                     concepts_to_delete_identifiers.add(identifier)
-                    continue
-
-                not_same_versions = set(i14y_code_versions.keys()) != set(lindas_code_versions.keys())
-                if not_same_versions:
-                    print(f"DEBUG: for concept {identifier} there are different versions on LINDAS and i14y")
-                    concepts_to_delete_identifiers.add(identifier)
-
-                # We don't add concepts with empty codelists on LINDAS
-                empty_codelist = all([len(codelist) == 0 for codelist in i14y_code_versions.values()])
-                if empty_codelist:
-                    print(f"DEBUG: for concept {identifier} the codelist is empty on i14y")
-                    concepts_to_ignore.append(concept_id)
-
-                # There was a case when on LINDAS there were already concepts with empty codelists, this way we delete them on LINDAS and do not reimport them
-                if not_same_versions or empty_codelist:
-                    continue
-
-                nb_same_versions = 0
-                for version, codes in i14y_code_versions.items():
-                    if codes != lindas_code_versions.get(version, {}):
-                        print(
-                            f"DEBUG: for concept {identifier} version {version} there is a difference between i14y and lindas codes"
-                        )
-                        concepts_to_delete_identifiers.add(identifier)
-                        break
-                    else:
-                        print(
-                            f"DEBUG: for concept {identifier} version {version} there is no difference between i14y and lindas codes"
-                        )
-                        nb_same_versions += 1
-
-                if nb_same_versions == len(lindas_code_versions.keys()):
-                    concepts_unchanged.append(concept_id)
+                    concepts_to_process.append(concept_id)
+                else:
+                    print(
+                        f"DEBUG: concept {identifier} modified at {modified_at.isoformat()} "
+                        "on i14y, no reimport needed"
+                    )
 
             for concept_identifier in concepts_to_delete_identifiers:
                 LindasAPIHelper.delete_concept(concept_identifier)
 
-            # We reimport only concepts that have changed on I14y + those that are not ignored (e.g. we ignore concepts with empty codelists)
-            concept_ids = list(set(concept_ids) - set(concepts_unchanged) - set(concepts_to_ignore))
+            concept_ids = concepts_to_process
 
         for concept_id in concept_ids:
             self.process_new_concept(concept_id)

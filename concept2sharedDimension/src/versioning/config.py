@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from rdflib import Namespace
 
 # Toggle between using statuses or concept_ids
@@ -41,6 +42,9 @@ SKOLEM_VERSION_BASE_URI = BASE_URI + "{concept_identifier}/.well-known/genid/{ha
 BASE_API_URL = os.environ.get("BASE_API_URL", "https://api-a.i14y.admin.ch/api/public/v1/concepts/")
 
 MAX_WORKERS = os.environ.get("MAX_WORKERS", 5)
+# Use a larger default on Monday to cover weekend changes.
+DEFAULT_I14Y_MODIFIED_LOOKBACK_HOURS = 96 if datetime.now(timezone.utc).weekday() == 0 else 24
+I14Y_MODIFIED_LOOKBACK_HOURS = int(os.environ.get("I14Y_MODIFIED_LOOKBACK_HOURS", DEFAULT_I14Y_MODIFIED_LOOKBACK_HOURS))
 
 # namespace
 SDO = Namespace("http://schema.org/")
