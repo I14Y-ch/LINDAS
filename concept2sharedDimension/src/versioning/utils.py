@@ -447,6 +447,17 @@ WHERE {{
 
     @staticmethod
     def delete_concept(concept_identifier):
+        protected_versions = I14YAPIHelper.get_protected_vocabulary_versions()
+        lindas_versions = LindasAPIHelper.get_lindas_concept_versions().get(concept_identifier, [])
+        matched_versions = sorted(
+            version for version in lindas_versions if (concept_identifier, version) in protected_versions
+        )
+        if matched_versions:
+            print(
+                f"DEBUG: skip delete_concept for protected vocabulary {concept_identifier} "
+                f"version(s) {', '.join(matched_versions)}"
+            )
+            return False
         print(f"DEBUG: delete_concept concept {concept_identifier}")
         concept_base = f"{BASE_URI}{concept_identifier}"
 
@@ -483,6 +494,46 @@ class I14YAPIHelper:
     # Same idea, but here we have a concept identifier -> concept list map, useful when a concept identifier has multiple versions
     local_identifier_concepts_map = {}
 
+    # Pairs from the core vocabulary configuration endpoint. None means not loaded yet.
+    protected_vocabulary_versions = None
+
+    @staticmethod
+    def get_protected_vocabulary_versions():
+        """Return configured (conceptIdentifier, conceptVersion) pairs; fail closed on errors."""
+        if I14YAPIHelper.protected_vocabulary_versions is not None:
+            return I14YAPIHelper.protected_vocabulary_versions
+
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                response = r.get(
+                    VOCABULARY_CONFIGURATIONS_URL,
+                    timeout=60,
+                    verify=False if DEBUG_LOCAL_TEST else True,
+                    headers={"User-Agent": I14Y_USER_AGENT, "Accept": "application/json"},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, list):
+                    raise ValueError("Vocabulary configurations endpoint returned a non-list payload")
+                pairs = {
+                    (item["conceptIdentifier"], item["conceptVersion"])
+                    for item in payload
+                    if isinstance(item, dict)
+                    and item.get("conceptIdentifier")
+                    and item.get("conceptVersion")
+                }
+                I14YAPIHelper.protected_vocabulary_versions = pairs
+                print(f"DEBUG: loaded {len(pairs)} protected vocabulary version(s)")
+                return pairs
+            except Exception as error:
+                last_error = error
+                if attempt < 3:
+                    sleep(random.uniform(1, 2))
+
+        raise RuntimeError(
+            f"Could not load protected vocabulary configurations from {VOCABULARY_CONFIGURATIONS_URL}"
+        ) from last_error
     @staticmethod
     def get_all_concepts(registration_statuses=None, pageSize=50):
         """Get all CodeList concepts with specified registration statuses"""

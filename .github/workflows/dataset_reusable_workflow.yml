@@ -1,0 +1,210 @@
+name: Dataset2Lindas Update (reusable workflow)
+
+on:
+  workflow_call:
+    inputs:
+      CLEAR_GRAPH:
+        required: true
+        type: boolean
+      CREATE_DATASET_CATALOG:
+        required: true
+        type: boolean
+      LINDAS_UPDATE_URL:
+        required: true
+        type: string
+      LINDAS_QUERY_URL:
+        required: true
+        type: string
+      I14Y_DATASETS_API_URL:
+        required: false
+        type: string
+        default: https://api.i14y.admin.ch/api/datasets
+      I14Y_DATASERVICES_API_URL:
+        required: false
+        type: string
+        default: https://api.i14y.admin.ch/api/dataservices
+    secrets:
+      STARDOG_PASSWORD:
+        required: true
+      STARDOG_USER:
+        required: true
+
+env:
+  PYTHON_VERSION: "3.10"
+  TARGET_GRAPH: "https://lindas.admin.ch/fso/i14y"
+  CLEAR_GRAPH: ${{ inputs.CLEAR_GRAPH }}
+  CREATE_DATASET_CATALOG: ${{ inputs.CREATE_DATASET_CATALOG }}
+  LINDAS_UPDATE_URL: ${{ inputs.LINDAS_UPDATE_URL }}
+  LINDAS_QUERY_URL: ${{ inputs.LINDAS_QUERY_URL }}
+  I14Y_DATASETS_API_URL: ${{ inputs.I14Y_DATASETS_API_URL }}
+  I14Y_DATASERVICES_API_URL: ${{ inputs.I14Y_DATASERVICES_API_URL }}
+  DATASET_BATCH_SIZE: "100"
+
+jobs:
+  get-datasets:
+    runs-on: ubuntu-latest
+    outputs:
+      total_to_process: ${{ steps.plan.outputs.total_to_process }}
+      source_count: ${{ steps.plan.outputs.source_count }}
+      batch_matrix: ${{ steps.plan.outputs.batch_matrix }}
+      should_finalize: ${{ steps.plan.outputs.should_finalize }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Scan i14y and build the incremental plan
+        id: plan
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from dataset2lindas.src.api import I14YDatasetsAPI, LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+          from dataset2lindas.src.synchronizer import DatasetSynchronizer
+
+          config = DatasetConfig.from_env()
+          plan = DatasetSynchronizer(config, I14YDatasetsAPI(config), LindasDatasetsAPI(config)).build_plan()
+          plan.write("dataset_sync_plan.json")
+          batch_size = int(os.environ["DATASET_BATCH_SIZE"])
+          batches = [plan.process_ids[index:index + batch_size] for index in range(0, len(plan.process_ids), batch_size)]
+          matrix = {"include": [
+              {"batch_index": index, "dataset_ids": ",".join(batch)}
+              for index, batch in enumerate(batches)
+          ]}
+          should_finalize = plan.has_work or config.clear_graph or config.create_dataset_catalog
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"total_to_process={len(plan.process_ids)}", file=output)
+              print(f"source_count={len(plan.source_identifiers)}", file=output)
+              print(f"batch_matrix={json.dumps(matrix)}", file=output)
+              print(f"should_finalize={'true' if should_finalize else 'false'}", file=output)
+          print(f"Source datasets: {len(plan.source_identifiers)}")
+          print(f"Datasets to write: {len(plan.process_ids)}")
+          print(f"Datasets to delete: {len(plan.delete_identifiers)}")
+          PY
+      - name: Archive synchronization plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataset-sync-plan-${{ github.run_id }}
+          path: dataset_sync_plan.json
+
+  process-batches:
+    needs: get-datasets
+    if: ${{ needs.get-datasets.outputs.total_to_process != '0' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.get-datasets.outputs.batch_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y raptor2-utils
+          python -m pip install -r requirements.txt
+      - name: Export dataset batch ${{ matrix.batch_index }}
+        env:
+          BATCH_DATASET_IDS: ${{ matrix.dataset_ids }}
+        run: python -m dataset2lindas.src.main --batch-index ${{ matrix.batch_index }}
+      - name: Validate Turtle
+        run: rapper -i turtle -c batch_${{ matrix.batch_index }}_datasets.ttl
+      - name: Archive dataset batch
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataset-batch-${{ github.run_id }}-${{ matrix.batch_index }}
+          path: batch_${{ matrix.batch_index }}_datasets.ttl
+
+  reconcile-and-upload:
+    needs: [get-datasets, process-batches]
+    if: ${{ always() && needs.get-datasets.result == 'success' && (needs.process-batches.result == 'success' || needs.process-batches.result == 'skipped') && needs.get-datasets.outputs.should_finalize == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y raptor2-utils
+          python -m pip install -r requirements.txt
+      - name: Download synchronization plan
+        uses: actions/download-artifact@v4
+        with:
+          name: dataset-sync-plan-${{ github.run_id }}
+          path: reconciliation
+      - name: Download validated dataset batches
+        if: ${{ needs.get-datasets.outputs.total_to_process != '0' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: batches
+          pattern: dataset-batch-${{ github.run_id }}-*
+          merge-multiple: true
+      - name: Validate all generated Turtle files
+        if: ${{ needs.get-datasets.outputs.total_to_process != '0' }}
+        run: |
+          for file in batches/*.ttl; do
+            test -f "$file" || continue
+            rapper -i turtle -c "$file"
+          done
+      - name: Clear or reconcile the LINDAS graph
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+        run: |
+          python - <<'PY'
+          from dataset2lindas.src.api import I14YDatasetsAPI, LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+          from dataset2lindas.src.synchronizer import DatasetSynchronizer, SyncPlan
+
+          config = DatasetConfig.from_env()
+          lindas = LindasDatasetsAPI(config)
+          if config.clear_graph:
+              lindas.clear_graph()
+          else:
+              DatasetSynchronizer(config, I14YDatasetsAPI(config), lindas).apply_deletions(
+                  SyncPlan.read("reconciliation/dataset_sync_plan.json")
+              )
+          PY
+      - name: Build the optional common dataset catalogue
+        if: env.CREATE_DATASET_CATALOG == 'true'
+        run: |
+          python -m dataset2lindas.src.main --catalog-only --output dataset_catalog.ttl
+          rapper -i turtle -c dataset_catalog.ttl
+      - name: Upload Turtle artifacts
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from dataset2lindas.src.api import LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+
+          config = DatasetConfig.from_env()
+          lindas = LindasDatasetsAPI(config)
+          files = sorted(Path("batches").glob("*.ttl")) if Path("batches").exists() else []
+          if Path("dataset_catalog.ttl").exists():
+              files.append(Path("dataset_catalog.ttl"))
+          for file_path in files:
+              lindas.upload_turtle(file_path)
+          print(f"Uploaded {len(files)} Turtle artifact(s) to {config.target_graph}")
+          PY
+
+  final-summary:
+    needs: [get-datasets, process-batches, reconcile-and-upload]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "Source datasets: ${{ needs.get-datasets.outputs.source_count }}"
+          echo "Datasets exported: ${{ needs.get-datasets.outputs.total_to_process }}"
+          echo "Target graph: ${{ env.TARGET_GRAPH }}"

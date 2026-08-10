@@ -1,0 +1,29 @@
+name: "[DATASETS GRAPHDB INT] Incremental Update"
+
+on:
+  # schedule:
+  #   - cron: "0 2 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      CLEAR_GRAPH:
+        description: "Drop the target graph before upload"
+        required: false
+        type: boolean
+        default: false
+      CREATE_DATASET_CATALOG:
+        description: "Create or update the optional common dataset catalogue"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  update-datasets:
+    uses: ./.github/workflows/dataset_reusable_workflow.yml
+    with:
+      CLEAR_GRAPH: ${{ inputs.CLEAR_GRAPH || false }}
+      CREATE_DATASET_CATALOG: ${{ inputs.CREATE_DATASET_CATALOG || false }}
+      LINDAS_UPDATE_URL: "https://int.graphdb.lindas.admin.ch/repositories/lindas/statements"
+      LINDAS_QUERY_URL: "https://int.lindas.admin.ch/query"
+    secrets:
+      STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}
+      STARDOG_USER: ${{ secrets.GRAPHDB_USER }}
