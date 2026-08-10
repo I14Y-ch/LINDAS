@@ -75,14 +75,16 @@ class DatasetRdfMapper:
     def _resource_uri(self, value: str | None) -> URIRef:
         if not self._non_empty(value):
             return INVALID_URI
-        parsed = urlparse(str(value))
-        return URIRef(str(value)) if parsed.scheme else INVALID_URI
+        normalized = str(value).strip()
+        parsed = urlparse(normalized)
+        return URIRef(normalized) if parsed.scheme else INVALID_URI
 
     def _url_uri(self, value: str | None) -> URIRef:
         if not self._non_empty(value):
             return INVALID_URI
-        parsed = urlparse(str(value))
-        return URIRef(str(value)) if parsed.scheme.lower() in ALLOWED_RESOURCE_SCHEMES else INVALID_URI
+        normalized = str(value).strip()
+        parsed = urlparse(normalized)
+        return URIRef(normalized) if parsed.scheme.lower() in ALLOWED_RESOURCE_SCHEMES else INVALID_URI
 
     @staticmethod
     def _add_multilingual(graph: Graph, subject: Any, predicate: URIRef, values: Any) -> None:
