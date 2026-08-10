@@ -114,8 +114,27 @@ jobs:
           BATCH_DATASET_IDS: ${{ matrix.dataset_ids }}
         run: python -m dataset2lindas.src.main --batch-index ${{ matrix.batch_index }}
       - name: Validate Turtle
-        run: rapper -i turtle -c batch_${{ matrix.batch_index }}_datasets.ttl
+        shell: bash
+        run: |
+          ttl_file="batch_${{ matrix.batch_index }}_datasets.ttl"
+          set +e
+          validation_output="$(rapper -i turtle -c "$ttl_file" 2>&1)"
+          validation_status=$?
+          set -e
+          printf '%s\n' "$validation_output"
+          if [ "$validation_status" -ne 0 ]; then
+            error_line="$(printf '%s\n' "$validation_output" | sed -nE 's/.*\.ttl:([0-9]+).*/\1/p' | head -n 1)"
+            if [ -n "$error_line" ]; then
+              first_line=$((error_line > 5 ? error_line - 5 : 1))
+              last_line=$((error_line + 5))
+              echo "::group::Turtle context around line $error_line"
+              nl -ba "$ttl_file" | sed -n "${first_line},${last_line}p"
+              echo "::endgroup::"
+            fi
+            exit "$validation_status"
+          fi
       - name: Archive dataset batch
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: dataset-batch-${{ github.run_id }}-${{ matrix.batch_index }}
