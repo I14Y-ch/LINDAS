@@ -2,7 +2,7 @@ name: "[DATASETS GRAPHDB TEST] Incremental Update"
 
 on:
   schedule:
-    - cron: "0 3 * * 1-5"
+    - cron: "30 3 * * 1-5"
   workflow_dispatch:
     inputs:
       CLEAR_GRAPH:
