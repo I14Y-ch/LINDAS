@@ -80,6 +80,35 @@ class I14YDatasetsAPI:
             raise ValueError(f"GET /api/datasets/{dataset_id} returned no dataset")
         return data
 
+    def get_dataset_structure_turtle(self, dataset_id: str) -> str | None:
+        """Return the dataset SHACL Turtle, or ``None`` when i14y has no structure.
+
+        A missing structure is the documented ``404`` outcome. Other HTTP failures
+        are retried with the same policy as the JSON endpoints.
+        """
+        url = f"{self.config.datasets_api_url}/{dataset_id}/structures/exports/TTL"
+        headers = {"User-Agent": self.config.user_agent, "Accept": "text/turtle, */*"}
+        last_error: Exception | None = None
+        for attempt in range(1, self.config.api_retries + 1):
+            try:
+                response = self.session.get(
+                    url,
+                    headers=headers,
+                    timeout=60,
+                    verify=False if self.config.debug_local_test else True,
+                )
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                return response.text
+            except Exception as error:
+                last_error = error
+                if attempt < self.config.api_retries:
+                    sleep(random.uniform(1, 2))
+        raise RuntimeError(
+            f"i14y structure request failed after {self.config.api_retries} attempts: {url}"
+        ) from last_error
+
     def is_dataservice_public(self, dataservice_id: str) -> bool:
         if dataservice_id not in self._dataservice_public_cache:
             payload = self._get_json(f"{self.config.dataservices_api_url}/{dataservice_id}")
@@ -157,41 +186,86 @@ WHERE {{
         self.update(f"DROP GRAPH <{self.config.target_graph}>")
 
     def delete_dataset(self, identifier: str) -> None:
-        """Delete the known two-level skolem tree through dataset-anchored patterns."""
+        """Remove the dataset-owned namespace and its explicitly tracked externals."""
         dataset_uri = f"{self.config.dataset_uri_base}{identifier}"
+        dataset_prefix = f"{dataset_uri}/"
+        structure_uri = f"{dataset_uri}/structure"
         skolem_prefix = f"{dataset_uri}/.well-known/genid/"
         graph = self.config.target_graph
-        catalog = self.config.catalog_uri
+
+        def delete_by_dataset_iri(node_variable: str) -> str:
+            node_filter = (
+                f'isIRI({node_variable}) && '
+                f'(STR({node_variable}) = "{dataset_uri}" || '
+                f'STRSTARTS(STR({node_variable}), "{dataset_prefix}"))'
+            )
+            return f'''\
+DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    ?s ?p ?o .
+    FILTER ({node_filter})
+  }}
+}}'''
+
         updates = [
-            # Checksums are the only skolem nodes below a direct child of a dataset.
+            # External structure subjects are indexed as parts. Their triples only
+            # disappear once no other structure still declares the same part.
             f'''\
-DELETE {{ GRAPH <{graph}> {{ ?nested ?p ?o . }} }}
+PREFIX dct: <http://purl.org/dc/terms/>
+DELETE {{ GRAPH <{graph}> {{ ?part ?p ?o . }} }}
 WHERE {{
   GRAPH <{graph}> {{
-    <{dataset_uri}> ?dataset_predicate ?parent .
-    FILTER(isIRI(?parent) && STRSTARTS(STR(?parent), "{skolem_prefix}"))
-    ?parent ?parent_predicate ?nested .
-    FILTER(isIRI(?nested) && STRSTARTS(STR(?nested), "{skolem_prefix}"))
-    ?nested ?p ?o .
+    <{dataset_uri}> dct:conformsTo <{structure_uri}> .
+    <{structure_uri}> dct:hasPart ?part .
+    FILTER(isIRI(?part) &&
+      !(STR(?part) = "{dataset_uri}" || STRSTARTS(STR(?part), "{dataset_prefix}")))
+    FILTER NOT EXISTS {{
+      ?other_structure dct:hasPart ?part .
+      FILTER(?other_structure != <{structure_uri}>)
+    }}
+    ?part ?p ?o .
   }}
 }}''',
-            # Contacts, publisher, period, qualified nodes and distributions.
-            f'''\
-DELETE {{ GRAPH <{graph}> {{ ?node ?p ?o . }} }}
-WHERE {{
-  GRAPH <{graph}> {{
-    <{dataset_uri}> ?dataset_predicate ?node .
-    FILTER(isIRI(?node) && STRSTARTS(STR(?node), "{skolem_prefix}"))
-    ?node ?p ?o .
-  }}
-}}''',
-            f'''\
-DELETE {{ GRAPH <{graph}> {{ <{dataset_uri}> ?p ?o . }} }}
-WHERE  {{ GRAPH <{graph}> {{ <{dataset_uri}> ?p ?o . }} }}''',
+            # Keep the C# DCAT mapping, then remove only the auxiliary rdf:type
+            # assertions it created for external resources once their last local
+            # dataset/distribution link is gone.
             f'''\
 PREFIX dcat: <http://www.w3.org/ns/dcat#>
-DELETE {{ GRAPH <{graph}> {{ <{catalog}> dcat:dataset <{dataset_uri}> . }} }}
-WHERE  {{ GRAPH <{graph}> {{ <{catalog}> dcat:dataset <{dataset_uri}> . }} }}''',
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
+DELETE {{ GRAPH <{graph}> {{ ?resource rdf:type ?resource_type . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    VALUES (?relation ?resource_type) {{
+      (dcat:accessURL rdfs:Resource)
+      (dcat:downloadURL rdfs:Resource)
+      (dcat:landingPage foaf:Document)
+      (dct:conformsTo dct:standard)
+      (dct:isReferencedBy rdfs:Resource)
+      (dct:relation rdfs:Resource)
+      (foaf:page foaf:Document)
+      (schema:image schema:url)
+    }}
+    ?owner ?relation ?resource .
+    FILTER(isIRI(?owner) &&
+      (STR(?owner) = "{dataset_uri}" || STRSTARTS(STR(?owner), "{skolem_prefix}")))
+    FILTER(isIRI(?resource) &&
+      !(STR(?resource) = "{dataset_uri}" || STRSTARTS(STR(?resource), "{dataset_prefix}")))
+    ?resource rdf:type ?resource_type .
+    FILTER NOT EXISTS {{
+      ?other_owner ?relation ?resource .
+      FILTER(!isIRI(?other_owner) ||
+        (STR(?other_owner) != "{dataset_uri}" &&
+         !STRSTARTS(STR(?other_owner), "{skolem_prefix}")))
+    }}
+  }}
+}}''',
+            delete_by_dataset_iri("?o"),
+            delete_by_dataset_iri("?s"),
         ]
         for update in updates:
             self.update(update)

@@ -23,6 +23,7 @@ FOAF = Namespace("http://xmlns.com/foaf/0.1/")
 SCHEMA = Namespace("http://schema.org/")
 SPDX = Namespace("http://spdx.org/rdf/terms#")
 VCARD = Namespace("http://www.w3.org/2006/vcard/ns#")
+SH = Namespace("http://www.w3.org/ns/shacl#")
 INVALID_URI = URIRef("https://en.wikipedia.org/wiki/Uniform_Resource_Identifier")
 ALLOWED_RESOURCE_SCHEMES = {"http", "https", "mailto", "ftp", "ftps", "sftp"}
 
@@ -52,6 +53,9 @@ class DatasetRdfMapper:
         return BNode(f"{self._current_identifier}-{label}-{occurrence}")
     def dataset_uri(self, identifier: str) -> URIRef:
         return URIRef(f"{self.config.dataset_uri_base}{identifier}")
+
+    def dataset_structure_uri(self, identifier: str) -> URIRef:
+        return URIRef(f"{self.config.dataset_uri_base}{identifier}/structure")
 
     def dataservice_uri(self, dataservice_id: str) -> URIRef:
         return URIRef(f"{self.config.dataservice_uri_base}{dataservice_id}")
@@ -328,6 +332,47 @@ class DatasetRdfMapper:
         for identifier in identifiers:
             graph.add((catalog, DCAT.dataset, self.dataset_uri(identifier)))
 
+    def add_structure_turtle(
+        self,
+        writer: DatasetStreamingTurtleWriter,
+        identifier: str,
+        structure_turtle: str | None,
+    ) -> None:
+        """Serialize one structure and index only NodeShapes plus external subjects.
+
+        The graph only lives for this one structure. Blank nodes are emitted through
+        the structure-specific skolem scope and are consequently covered by the
+        dataset URI-prefix deletion.
+        """
+        if structure_turtle is None:
+            return
+        try:
+            structure_graph = Graph().parse(data=structure_turtle, format="turtle")
+        except Exception as error:
+            raise ValueError(f"Dataset {identifier} has invalid structure Turtle") from error
+
+        dataset_uri = self.dataset_uri(identifier)
+        dataset_prefix = f"{dataset_uri}/"
+        structure_uri = self.dataset_structure_uri(identifier)
+        writer.add((dataset_uri, DCTERMS.conformsTo, structure_uri))
+        writer.set_current_structure(identifier)
+
+        def is_dataset_resource(node: Any) -> bool:
+            return isinstance(node, URIRef) and (
+                str(node) == str(dataset_uri) or str(node).startswith(dataset_prefix)
+            )
+
+        node_shapes = set(structure_graph.subjects(RDF.type, SH.NodeShape))
+        external_subjects = {
+            subject
+            for subject in structure_graph.subjects()
+            if isinstance(subject, URIRef) and not is_dataset_resource(subject)
+        }
+        parts = node_shapes | external_subjects
+        for part in sorted(parts, key=lambda node: (type(node).__name__, str(node))):
+            writer.add((structure_uri, DCTERMS.hasPart, part))
+        for triple in structure_graph:
+            writer.add(triple)
     @staticmethod
     def bind_namespaces(graph: Graph) -> None:
         graph.bind("dcat", DCAT)
@@ -341,7 +386,12 @@ class DatasetRdfMapper:
         graph.bind("vcard", VCARD)
         graph.bind("xsd", XSD)
 
-    def write_dataset_turtle(self, datasets: Iterable[dict[str, Any]], output_path: str | Path) -> int:
+    def write_dataset_turtle(
+        self,
+        datasets: Iterable[dict[str, Any]],
+        output_path: str | Path,
+        structure_turtle_for_dataset: Callable[[str], str | None] | None = None,
+    ) -> int:
         """Write one dataset at a time; no rdflib Graph is retained for the batch."""
         count = 0
         with DatasetStreamingTurtleWriter(output_path, self.config.dataset_uri_base) as writer:
@@ -350,8 +400,17 @@ class DatasetRdfMapper:
                 identifiers = dataset.get("identifiers") or []
                 if not identifiers or not self._non_empty(identifiers[0]):
                     raise ValueError(f"Dataset {dataset.get('id', '<unknown>')} has no primary identifier")
-                writer.set_current_dataset(str(identifiers[0]))
+                identifier = str(identifiers[0])
+                if structure_turtle_for_dataset is None:
+                    structure_turtle = None
+                else:
+                    dataset_id = dataset.get("id")
+                    if not self._non_empty(dataset_id):
+                        raise ValueError(f"Dataset {identifier} has no i14y id")
+                    structure_turtle = structure_turtle_for_dataset(str(dataset_id))
+                writer.set_current_dataset(identifier)
                 self.map_dataset(dataset, writer)
+                self.add_structure_turtle(writer, identifier, structure_turtle)
                 count += 1
         return count
 

@@ -481,6 +481,16 @@ WHERE {{
                 f'isIRI({node_var}) && '
                 f'(STR({node_var}) = "{concept_base}" || STRSTARTS(STR({node_var}), "{concept_base}/"))'
             )
+            if node_var == "?o":
+                # A structure belongs to its dataset. Keep its conformsTo link even
+                # after its target concept disappears; dataset deletion removes it.
+                structure_conforms_to = (
+                    '?p = <http://purl.org/dc/terms/conformsTo> && '
+                    'isIRI(?s) && '
+                    f'STRSTARTS(STR(?s), "{DATASET_URI_BASE}") && '
+                    'CONTAINS(STR(?s), "/structure/")'
+                )
+                node_filter = f'{node_filter} && !({structure_conforms_to})'
             print(f"DEBUG: delete_concept side={node_name} concept={concept_identifier}")
             LindasAPIHelper.graphdb_update(build_delete_query(node_filter))
 

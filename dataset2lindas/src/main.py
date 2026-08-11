@@ -41,7 +41,7 @@ def main() -> None:
     if not ids:
         raise ValueError("Provide --dataset-ids or BATCH_DATASET_IDS")
     datasets = (api.get_dataset(dataset_id) for dataset_id in ids)
-    count = mapper.write_dataset_turtle(datasets, output)
+    count = mapper.write_dataset_turtle(datasets, output, api.get_dataset_structure_turtle)
     print(f"Wrote {count} dataset(s) to {output}")
 
 

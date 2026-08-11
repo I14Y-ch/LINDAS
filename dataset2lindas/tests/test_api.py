@@ -28,10 +28,10 @@ def make_config() -> DatasetConfig:
 
 
 class Response:
-    def __init__(self, payload=None):
+    def __init__(self, payload=None, *, text="", status_code=204):
         self.payload = payload or {}
-        self.status_code = 204
-        self.text = ""
+        self.status_code = status_code
+        self.text = text
 
     def raise_for_status(self):
         return None
@@ -86,18 +86,41 @@ class ApiTests(unittest.TestCase):
         self.assertEqual({"DATASET_1", "DATASET_2"}, api.get_existing_dataset_identifiers())
         self.assertIn("dct:identifier ?identifier", queries[0])
         self.assertNotIn("STRSTARTS", queries[0])
-    def test_dataset_deletion_uses_dataset_anchored_skolem_queries(self):
+    def test_dataset_structure_returns_turtle_and_treats_404_as_absence(self):
+        class StructureSession(Session):
+            def get(self, url, **kwargs):
+                self.get_calls.append((url, kwargs))
+                if url.endswith("/missing/structures/exports/TTL"):
+                    return Response(status_code=404)
+                return Response(
+                    text="<https://example.org/shape> a <http://www.w3.org/ns/shacl#NodeShape> ."
+                )
+
+        session = StructureSession()
+        api = I14YDatasetsAPI(make_config(), session)
+        self.assertIn("NodeShape", api.get_dataset_structure_turtle("present"))
+        self.assertIsNone(api.get_dataset_structure_turtle("missing"))
+        self.assertEqual(
+            "https://api.example/datasets/present/structures/exports/TTL",
+            session.get_calls[0][0],
+        )
+        self.assertIn("text/turtle", session.get_calls[0][1]["headers"]["Accept"])
+
+    def test_dataset_deletion_cleans_external_parts_then_uses_two_prefix_queries(self):
         session = Session()
         api = LindasDatasetsAPI(make_config(), session)
         api.delete_dataset("DATASET_1")
         updates = [call[1]["data"] for call in session.post_calls]
+
         self.assertEqual(4, len(updates))
-        self.assertTrue(all("?s ?p ?o" not in update for update in updates))
-        self.assertIn("<{dataset_uri}> ?dataset_predicate ?parent".format(
-            dataset_uri="https://register.ld.admin.ch/i14y/dataset/DATASET_1"
-        ), updates[0])
-        self.assertIn("STRSTARTS(STR(?parent)", updates[0])
-        self.assertIn("dcat:dataset", updates[-1])
+        self.assertIn("dct:hasPart ?part", updates[0])
+        self.assertIn("FILTER NOT EXISTS", updates[0])
+        self.assertIn("VALUES (?relation ?resource_type)", updates[1])
+        self.assertIn("?resource rdf:type ?resource_type", updates[1])
+        self.assertIn("isIRI(?o)", updates[2])
+        self.assertIn("STRSTARTS(STR(?o)", updates[2])
+        self.assertIn("isIRI(?s)", updates[3])
+        self.assertIn("STRSTARTS(STR(?s)", updates[3])
 
 
 if __name__ == "__main__":

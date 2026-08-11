@@ -8,7 +8,7 @@ from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import DCTERMS, RDF, XSD
 
 from dataset2lindas.src.config import DatasetConfig
-from dataset2lindas.src.mapper import DCAT, DCATAP, INVALID_URI, SPDX, VCARD, DatasetRdfMapper
+from dataset2lindas.src.mapper import DCAT, DCATAP, INVALID_URI, SH, SPDX, VCARD, DatasetRdfMapper
 
 
 def make_config() -> DatasetConfig:
@@ -146,6 +146,40 @@ class DatasetRdfMapperTests(unittest.TestCase):
         catalog = URIRef(self.mapper.config.catalog_uri)
         self.assertIn((catalog, RDF.type, DCAT.Catalog), self.graph)
         self.assertIn((catalog, DCAT.dataset, self.mapper.dataset_uri("DATASET_2")), self.graph)
+
+    def test_keeps_structure_concept_links_and_indexes_external_subjects(self) -> None:
+        structure_uri = self.mapper.dataset_structure_uri("DATASET_1")
+        node_shape = URIRef(f"{structure_uri}/ExampleShape")
+        ontology = URIRef("https://example.org/ontology")
+        concept = URIRef("https://register.ld.admin.ch/i14y/concept/DV_EXAMPLE/version/1.0.0")
+        source_turtle = f'''@prefix dct: <{DCTERMS}> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <{SH}> .
+
+<{node_shape}> a sh:NodeShape ;
+    sh:property [
+        a sh:PropertyShape ;
+        dct:conformsTo <{concept}> ;
+        sh:or ([ sh:class <https://example.org/first> ] [ sh:class <https://example.org/second> ])
+    ] .
+<{ontology}> a owl:Ontology .
+'''
+        with TemporaryDirectory() as directory:
+            output_path = Path(directory) / "dataset.ttl"
+            self.mapper.write_dataset_turtle(
+                [dataset()], output_path, lambda dataset_id: source_turtle
+            )
+            turtle = output_path.read_text(encoding="utf-8")
+            graph = Graph().parse(data=turtle, format="turtle")
+
+        parts = set(graph.objects(structure_uri, DCTERMS.hasPart))
+        property_shape = next(graph.subjects(RDF.type, SH.PropertyShape))
+        self.assertNotIn("_:", turtle)
+        self.assertIn((self.uri, DCTERMS.conformsTo, structure_uri), graph)
+        self.assertEqual({node_shape, ontology}, parts)
+        self.assertTrue(str(property_shape).startswith(f"{structure_uri}/.well-known/genid/"))
+        self.assertIn((property_shape, DCTERMS.conformsTo, concept), graph)
+        self.assertIn((ontology, RDF.type, URIRef("http://www.w3.org/2002/07/owl#Ontology")), graph)
 
 
 if __name__ == "__main__":
