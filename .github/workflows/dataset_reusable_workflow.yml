@@ -213,7 +213,16 @@ jobs:
           if Path("dataset_catalog.ttl").exists():
               files.append(Path("dataset_catalog.ttl"))
           for file_path in files:
-              lindas.upload_turtle(file_path)
+              try:
+                  lindas.upload_turtle(file_path)
+              except Exception:
+                  # GraphDB can reject an IRI although rapper accepted the Turtle.
+                  # The batches are otherwise intentionally silent: print only the
+                  # exact artifact which failed to upload.
+                  print(f"::group::Turtle rejected by LINDAS: {file_path}")
+                  print(file_path.read_text(encoding="utf-8"))
+                  print("::endgroup::")
+                  raise
           print(f"Uploaded {len(files)} Turtle artifact(s) to {config.target_graph}")
           PY
 
