@@ -140,6 +140,42 @@ class DatasetRdfMapperTests(unittest.TestCase):
             export_distribution_iris([first, second]),
             export_distribution_iris([second, first]),
         )
+    def test_streamed_turtle_repairs_utf8_mojibake_in_shape_iris(self) -> None:
+        structure_uri = self.mapper.dataset_structure_uri("DATASET_1")
+        invalid_shape = f"{structure_uri}/privaterUndÃ\u0096ffentlicherSektor"
+        mojibake_shape = f"{structure_uri}/erlaubteHÃ¶chstgeschwindigkeit"
+        source_turtle = f'''@prefix sh: <{SH}> .
+
+<{invalid_shape}> a sh:NodeShape ;
+    sh:description "Âge"@fr .
+<{mojibake_shape}> a sh:NodeShape ;
+    sh:name "Secteur privÃ© / public"@fr .
+'''
+        with TemporaryDirectory() as directory:
+            output_path = Path(directory) / "dataset.ttl"
+            self.mapper.write_dataset_turtle(
+                [dataset()], output_path, lambda dataset_id: source_turtle
+            )
+            turtle = output_path.read_text(encoding="utf-8")
+            graph = Graph().parse(data=turtle, format="turtle")
+
+        repaired_shapes = {
+            URIRef(f"{structure_uri}/privaterUndÖffentlicherSektor"),
+            URIRef(f"{structure_uri}/erlaubteHöchstgeschwindigkeit"),
+        }
+        self.assertIn(
+            (URIRef(f"{structure_uri}/erlaubteHöchstgeschwindigkeit"), SH.name, Literal("Secteur privé / public", lang="fr")),
+            graph,
+        )
+        self.assertIn(
+            (URIRef(f"{structure_uri}/privaterUndÖffentlicherSektor"), SH.description, Literal("Âge", lang="fr")),
+            graph,
+        )
+        self.assertNotIn("\u0096", turtle)
+        self.assertNotIn("Ã", turtle)
+        for repaired_shape in repaired_shapes:
+            self.assertIn(f"<{repaired_shape}>", turtle)
+            self.assertIn((repaired_shape, RDF.type, SH.NodeShape), graph)
     def test_catalog_is_only_added_explicitly(self) -> None:
         self.assertEqual([], list(self.graph.subjects(RDF.type, DCAT.Catalog)))
         self.mapper.add_catalog(self.graph, ["DATASET_1", "DATASET_2"])

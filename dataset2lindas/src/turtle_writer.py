@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from urllib.parse import quote
 
 from rdflib import BNode, Literal, URIRef
 
@@ -54,9 +55,50 @@ class DatasetStreamingTurtleWriter:
         canonical = f"{self.current_skolem_uri_base}\0{node}"
         digest = hashlib.blake2s(canonical.encode("utf-8"), digest_size=16).hexdigest()
         return URIRef(f"{self.current_skolem_uri_base}{digest}")
+    @staticmethod
+    def _repair_utf8_mojibake(value: str) -> str:
+        """Repair UTF-8 bytes that i14y exported as Latin-1 characters.
+
+        For example, ``Ã¶`` is repaired to ``ö`` and ``Ã`` followed by
+        the C1 control ``U+0096`` is repaired to ``Ö``. The repair is only
+        attempted for the usual mojibake markers, so normal Unicode IRIs stay
+        unchanged.
+        """
+        has_mojibake_marker = "Ã" in value or "Â" in value
+        has_control = any(0x7F <= ord(character) <= 0x9F for character in value)
+        if not has_mojibake_marker and not has_control:
+            return value
+        try:
+            return value.encode("latin-1").decode("utf-8")
+        except UnicodeError:
+            return value
+
+    @staticmethod
+    def _escape_iri(value: str) -> str:
+        """Repair i14y mojibake and escape any remaining invalid IRI characters."""
+        value = DatasetStreamingTurtleWriter._repair_utf8_mojibake(value)
+        escaped: list[str] = []
+        position = 0
+        forbidden = '<>"{}|\\^`'
+        while position < len(value):
+            character = value[position]
+            if (
+                character == "%"
+                and position + 2 < len(value)
+                and all(char in "0123456789abcdefABCDEF" for char in value[position + 1:position + 3])
+            ):
+                escaped.append(value[position:position + 3])
+                position += 3
+                continue
+            if ord(character) <= 0x20 or 0x7F <= ord(character) <= 0x9F or character in forbidden:
+                escaped.append(quote(character, safe=""))
+            else:
+                escaped.append(character)
+            position += 1
+        return "".join(escaped)
     def _format_node(self, node: object) -> str:
         if isinstance(node, URIRef):
-            return f"<{node}>"
+            return f"<{self._escape_iri(str(node))}>"
         if isinstance(node, BNode):
             return f"<{self._skolemize(node)}>"
         if isinstance(node, Literal):
@@ -65,7 +107,8 @@ class DatasetStreamingTurtleWriter:
 
     @staticmethod
     def _format_literal(literal: Literal) -> str:
-        value = str(literal).replace("\r\n", "\n").replace("\r", "\n")
+        value = DatasetStreamingTurtleWriter._repair_utf8_mojibake(str(literal))
+        value = value.replace("\r\n", "\n").replace("\r", "\n")
         escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
         rendered = f'"{escaped}"'
         if literal.language:
