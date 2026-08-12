@@ -144,16 +144,16 @@ class DatasetRdfMapperTests(unittest.TestCase):
             export_distribution_iris([first, second]),
             export_distribution_iris([second, first]),
         )
-    def test_streamed_turtle_repairs_utf8_mojibake_in_shape_iris(self) -> None:
+    def test_streamed_turtle_preserves_utf8_in_shape_iris(self) -> None:
         structure_uri = self.mapper.dataset_structure_uri("DATASET_1")
-        invalid_shape = f"{structure_uri}/privaterUndÃ\u0096ffentlicherSektor"
-        mojibake_shape = f"{structure_uri}/erlaubteHÃ¶chstgeschwindigkeit"
+        first_shape = f"{structure_uri}/privaterUndÖffentlicherSektor"
+        second_shape = f"{structure_uri}/erlaubteHöchstgeschwindigkeit"
         source_turtle = f'''@prefix sh: <{SH}> .
 
-<{invalid_shape}> a sh:NodeShape ;
+<{first_shape}> a sh:NodeShape ;
     sh:description "Âge"@fr .
-<{mojibake_shape}> a sh:NodeShape ;
-    sh:name "Secteur privÃ© / public"@fr .
+<{second_shape}> a sh:NodeShape ;
+    sh:name "Secteur privé / public"@fr .
 '''
         with TemporaryDirectory() as directory:
             output_path = Path(directory) / "dataset.ttl"
@@ -163,23 +163,18 @@ class DatasetRdfMapperTests(unittest.TestCase):
             turtle = output_path.read_text(encoding="utf-8")
             graph = Graph().parse(data=turtle, format="turtle")
 
-        repaired_shapes = {
-            URIRef(f"{structure_uri}/privaterUndÖffentlicherSektor"),
-            URIRef(f"{structure_uri}/erlaubteHöchstgeschwindigkeit"),
-        }
+        expected_shapes = {URIRef(first_shape), URIRef(second_shape)}
         self.assertIn(
-            (URIRef(f"{structure_uri}/erlaubteHöchstgeschwindigkeit"), SH.name, Literal("Secteur privé / public", lang="fr")),
+            (URIRef(second_shape), SH.name, Literal("Secteur privé / public", lang="fr")),
             graph,
         )
         self.assertIn(
-            (URIRef(f"{structure_uri}/privaterUndÖffentlicherSektor"), SH.description, Literal("Âge", lang="fr")),
+            (URIRef(first_shape), SH.description, Literal("Âge", lang="fr")),
             graph,
         )
-        self.assertNotIn("\u0096", turtle)
-        self.assertNotIn("Ã", turtle)
-        for repaired_shape in repaired_shapes:
-            self.assertIn(f"<{repaired_shape}>", turtle)
-            self.assertIn((repaired_shape, RDF.type, SH.NodeShape), graph)
+        for expected_shape in expected_shapes:
+            self.assertIn(f"<{expected_shape}>", turtle)
+            self.assertIn((expected_shape, RDF.type, SH.NodeShape), graph)
     def test_catalog_is_only_added_explicitly(self) -> None:
         self.assertEqual([], list(self.graph.subjects(RDF.type, DCAT.Catalog)))
         self.mapper.add_catalog(self.graph, ["DATASET_1", "DATASET_2"])

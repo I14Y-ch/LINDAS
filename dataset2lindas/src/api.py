@@ -87,7 +87,10 @@ class I14YDatasetsAPI:
         are retried with the same policy as the JSON endpoints.
         """
         url = f"{self.config.datasets_api_url}/{dataset_id}/structures/exports/TTL"
-        headers = {"User-Agent": self.config.user_agent, "Accept": "text/turtle, */*"}
+        headers = {
+            "User-Agent": self.config.user_agent,
+            "Accept": "text/turtle; charset=utf-8, text/turtle, */*",
+        }
         last_error: Exception | None = None
         for attempt in range(1, self.config.api_retries + 1):
             try:
@@ -100,7 +103,10 @@ class I14YDatasetsAPI:
                 if response.status_code == 404:
                     return None
                 response.raise_for_status()
-                return response.text
+                # The i14y TTL is UTF-8. Do not use requests.Response.text here:
+                # it trusts a potentially incorrect charset advertised by the API
+                # and turns e.g. "ä" into "Ã¤" before the Turtle parser sees it.
+                return response.content.decode("utf-8")
             except Exception as error:
                 last_error = error
                 if attempt < self.config.api_retries:

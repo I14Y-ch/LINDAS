@@ -28,10 +28,11 @@ def make_config() -> DatasetConfig:
 
 
 class Response:
-    def __init__(self, payload=None, *, text="", status_code=204):
+    def __init__(self, payload=None, *, text="", content=None, status_code=204):
         self.payload = payload or {}
         self.status_code = status_code
         self.text = text
+        self.content = content if content is not None else text.encode("utf-8")
 
     def raise_for_status(self):
         return None
@@ -93,18 +94,28 @@ class ApiTests(unittest.TestCase):
                 if url.endswith("/missing/structures/exports/TTL"):
                     return Response(status_code=404)
                 return Response(
-                    text="<https://example.org/shape> a <http://www.w3.org/ns/shacl#NodeShape> ."
+                    text='incorrect charset: Zusatzstimmen_unverÃ¤nderte_Wahlzettel',
+                    content=(
+                        '<https://example.org/shape> a '
+                        '<http://www.w3.org/ns/shacl#NodeShape> ; '
+                        '<http://www.w3.org/ns/shacl#name> "Zusatzstimmen_'
+                        'unveränderte_Wahlzettel"@de .'
+                    ).encode("utf-8"),
                 )
 
         session = StructureSession()
         api = I14YDatasetsAPI(make_config(), session)
-        self.assertIn("NodeShape", api.get_dataset_structure_turtle("present"))
+        turtle = api.get_dataset_structure_turtle("present")
+        self.assertIn("NodeShape", turtle)
+        self.assertIn("Zusatzstimmen_unveränderte_Wahlzettel", turtle)
+        self.assertNotIn("Zusatzstimmen_unverÃ¤nderte_Wahlzettel", turtle)
         self.assertIsNone(api.get_dataset_structure_turtle("missing"))
         self.assertEqual(
             "https://api.example/datasets/present/structures/exports/TTL",
             session.get_calls[0][0],
         )
         self.assertIn("text/turtle", session.get_calls[0][1]["headers"]["Accept"])
+        self.assertIn("charset=utf-8", session.get_calls[0][1]["headers"]["Accept"])
 
     def test_dataset_deletion_uses_two_prefix_passes_and_keeps_orphan_cleanup(self):
         session = Session()
