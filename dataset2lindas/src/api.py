@@ -212,10 +212,18 @@ WHERE {{
   }}
 }}'''
 
-        # Keep the operations deliberately simple: GraphDB plans these two prefix
-        # filters far better than a UNION containing global FILTER NOT EXISTS checks.
+        delete_catalog_membership = f'''\
+PREFIX dcat: <http://www.w3.org/ns/dcat#>
+DELETE DATA {{
+  GRAPH <{graph}> {{
+    <{self.config.catalog_uri}> dcat:dataset <{dataset_uri}> .
+  }}
+}}'''
+
         self.update(delete_by(prefix_filter("?s")))
-        self.update(delete_by(prefix_filter("?o")))
+        # This exporter has no external inbound links other than the optional
+        # synthetic catalogue membership. Do not scan every object in the graph.
+        self.update(delete_catalog_membership)
     def upload_turtle(self, file_path: str | Path) -> None:
         """Upload a Turtle artifact transactionally on Stardog and directly on GraphDB."""
         path = Path(file_path)

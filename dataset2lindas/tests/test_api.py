@@ -128,8 +128,10 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("FILTER NOT EXISTS", updates[0])
         self.assertIn("isIRI(?s)", updates[0])
         self.assertIn('STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/dataset/DATASET_1")', updates[0])
-        self.assertIn("isIRI(?o)", updates[1])
-        self.assertIn('STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/dataset/DATASET_1")', updates[1])
+        self.assertIn("DELETE DATA", updates[1])
+        self.assertIn("dcat:dataset <https://register.ld.admin.ch/i14y/dataset/DATASET_1>", updates[1])
+        self.assertNotIn("?s", updates[1])
+        self.assertNotIn("FILTER", updates[1])
 
 
 if __name__ == "__main__":
