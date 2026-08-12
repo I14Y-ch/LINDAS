@@ -20,6 +20,7 @@ from .turtle_writer import DatasetStreamingTurtleWriter
 DCAT = Namespace("http://www.w3.org/ns/dcat#")
 DCATAP = Namespace("http://data.europa.eu/r5r/")
 FOAF = Namespace("http://xmlns.com/foaf/0.1/")
+ORG = Namespace("http://www.w3.org/ns/org#")
 SCHEMA = Namespace("http://schema.org/")
 SPDX = Namespace("http://spdx.org/rdf/terms#")
 VCARD = Namespace("http://www.w3.org/2006/vcard/ns#")
@@ -301,6 +302,8 @@ class DatasetRdfMapper:
             publisher_uri = self.agent_uri(str(publisher_identifier))
             graph.add((uri, DCTERMS.publisher, publisher_uri))
             graph.add((publisher_uri, RDF.type, FOAF.Agent))
+            graph.add((publisher_uri, RDF.type, ORG.Organization))
+            graph.add((publisher_uri, RDF.type, FOAF.Organization))
             self._add_multilingual(graph, publisher_uri, FOAF.name, publisher.get("name"))
 
         self._add_qualified_attributions(graph, uri, self._values(dataset.get("qualifiedAttributions")))

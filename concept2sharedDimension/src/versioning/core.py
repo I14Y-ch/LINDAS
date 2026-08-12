@@ -10,6 +10,8 @@ from rdflib.namespace import RDF
 import hashlib
 from urllib.parse import quote
 
+ORG = Namespace("http://www.w3.org/ns/org#")
+
 
 class StreamingTurtleWriter:
     """
@@ -646,6 +648,8 @@ class ConceptMetadataManager:
         publisher_uri = URIRef(f"{AGENT_URI_BASE}{quote(str(publisher_identifier).strip(), safe='-._~')}")
         self.vm.graph.add((uri, DCTERMS.publisher, publisher_uri))
         self.vm.graph.add((publisher_uri, RDF.type, FOAF.Agent))
+        self.vm.graph.add((publisher_uri, RDF.type, ORG.Organization))
+        self.vm.graph.add((publisher_uri, RDF.type, FOAF.Organization))
         for lang, publisher_name in publisher.get("name", {}).items():
             if is_valid_value(publisher_name):
                 self.vm.graph.add((publisher_uri, FOAF.name, Literal(publisher_name, lang=lang)))

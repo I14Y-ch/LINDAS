@@ -5,7 +5,8 @@ from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rdflib import Graph, Literal, URIRef
+from rdflib import Graph, Literal, Namespace, URIRef
+ORG = Namespace("http://www.w3.org/ns/org#")
 from rdflib.namespace import DCTERMS, RDF, FOAF
 
 from concept2sharedDimension.src.versioning.config import AGENT_URI_BASE, BASE_URI
@@ -59,6 +60,8 @@ class VocabularyProtectionTests(unittest.TestCase):
         publisher = URIRef(f"{AGENT_URI_BASE}CH1")
         self.assertIn((concept_uri, DCTERMS.publisher, publisher), graph)
         self.assertIn((publisher, RDF.type, FOAF.Agent), graph)
+        self.assertIn((publisher, RDF.type, ORG.Organization), graph)
+        self.assertIn((publisher, RDF.type, FOAF.Organization), graph)
         self.assertIn((publisher, FOAF.name, Literal("Office fédéral de la statistique", lang="fr")), graph)
 
     def test_concept_deletion_keeps_shared_agent_until_last_publisher_reference(self) -> None:

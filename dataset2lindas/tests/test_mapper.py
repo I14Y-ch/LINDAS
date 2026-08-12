@@ -8,7 +8,7 @@ from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import DCTERMS, RDF, XSD
 
 from dataset2lindas.src.config import DatasetConfig
-from dataset2lindas.src.mapper import DCAT, DCATAP, FOAF, INVALID_URI, SH, SPDX, VCARD, DatasetRdfMapper
+from dataset2lindas.src.mapper import DCAT, DCATAP, FOAF, ORG, INVALID_URI, SH, SPDX, VCARD, DatasetRdfMapper
 
 
 def make_config() -> DatasetConfig:
@@ -81,6 +81,8 @@ class DatasetRdfMapperTests(unittest.TestCase):
         publisher = self.mapper.agent_uri("CH1")
         self.assertIn((self.uri, DCTERMS.publisher, publisher), self.graph)
         self.assertIn((publisher, RDF.type, FOAF.Agent), self.graph)
+        self.assertIn((publisher, RDF.type, ORG.Organization), self.graph)
+        self.assertIn((publisher, RDF.type, FOAF.Organization), self.graph)
         self.assertIn((publisher, FOAF.name, Literal("OFS", lang="fr")), self.graph)
 
     def test_uses_blank_nodes_and_never_uses_version_link(self) -> None:
