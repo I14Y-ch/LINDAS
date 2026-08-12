@@ -243,6 +243,24 @@ DELETE DATA {{
         # This exporter has no other external inbound links to a dataset. Do not
         # scan every graph object merely to remove optional catalogue membership.
         self.update(delete_catalog_membership)
+    def delete_orphaned_publisher_agents(self) -> None:
+        """Remove i14y publisher agents with no remaining dataset or concept owner."""
+        graph = self.config.target_graph
+        agent_base = self.config.agent_uri_base
+        self.update(f'''\
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+DELETE {{ GRAPH <{graph}> {{ ?agent ?p ?o . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    ?agent a foaf:Agent ;
+           ?p ?o .
+    FILTER(isIRI(?agent) && STRSTARTS(STR(?agent), "{agent_base}"))
+    FILTER NOT EXISTS {{
+      ?owner dct:publisher ?agent .
+    }}
+  }}
+}}''')
     def upload_turtle(self, file_path: str | Path) -> None:
         """Upload a Turtle artifact transactionally on Stardog and directly on GraphDB."""
         path = Path(file_path)

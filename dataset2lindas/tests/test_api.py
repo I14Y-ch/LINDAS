@@ -137,5 +137,16 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("FILTER", updates[2])
 
 
+    def test_orphaned_publisher_cleanup_is_limited_to_unreferenced_i14y_agents(self):
+        session = Session()
+        api = LindasDatasetsAPI(make_config(), session)
+        api.delete_orphaned_publisher_agents()
+        update = session.post_calls[0][1]["data"]
+
+        self.assertIn("?agent a foaf:Agent", update)
+        self.assertIn("https://register.ld.admin.ch/i14y/agent/", update)
+        self.assertIn("?owner dct:publisher ?agent", update)
+        self.assertIn("FILTER NOT EXISTS", update)
+        self.assertNotIn("STRSTARTS(STR(?o)", update)
 if __name__ == "__main__":
     unittest.main()

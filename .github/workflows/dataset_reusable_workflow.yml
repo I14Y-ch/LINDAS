@@ -225,6 +225,17 @@ jobs:
                   raise
           print(f"Uploaded {len(files)} Turtle artifact(s) to {config.target_graph}")
           PY
+      - name: Remove orphaned publisher agents
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+        run: |
+          python - <<'PY'
+          from dataset2lindas.src.api import LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+
+          LindasDatasetsAPI(DatasetConfig.from_env()).delete_orphaned_publisher_agents()
+          PY
 
   final-summary:
     needs: [get-datasets, process-batches, reconcile-and-upload]
