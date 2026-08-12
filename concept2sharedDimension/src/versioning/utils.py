@@ -461,6 +461,12 @@ WHERE {{
         print(f"DEBUG: delete_concept concept {concept_identifier}")
         concept_base = f"{BASE_URI}{concept_identifier}"
 
+        def concept_iri_filter(node_variable):
+            return (
+                f'isIRI({node_variable}) && '
+                f'(STR({node_variable}) = "{concept_base}" || STRSTARTS(STR({node_variable}), "{concept_base}/"))'
+            )
+
         def build_delete_query(filter_expression):
             return f"""
 DELETE {{
@@ -476,24 +482,49 @@ WHERE {{
 }}
 """
 
-        for node_var, node_name in (("?o", "object"), ("?s", "subject")):
-            node_filter = (
-                f'isIRI({node_var}) && '
-                f'(STR({node_var}) = "{concept_base}" || STRSTARTS(STR({node_var}), "{concept_base}/"))'
-            )
-            if node_var == "?o":
-                # A structure belongs to its dataset. Keep its conformsTo link even
-                # after its target concept disappears; dataset deletion removes it.
-                structure_conforms_to = (
-                    '?p = <http://purl.org/dc/terms/conformsTo> && '
-                    'isIRI(?s) && '
-                    f'STRSTARTS(STR(?s), "{DATASET_URI_BASE}") && '
-                    'CONTAINS(STR(?s), "/structure/")'
-                )
-                node_filter = f'{node_filter} && !({structure_conforms_to})'
-            print(f"DEBUG: delete_concept side={node_name} concept={concept_identifier}")
-            LindasAPIHelper.graphdb_update(build_delete_query(node_filter))
+        object_filter = concept_iri_filter("?o")
+        # A structure belongs to its dataset. Keep its conformsTo link even
+        # after its target concept disappears; dataset deletion removes it.
+        structure_conforms_to = (
+            '?p = <http://purl.org/dc/terms/conformsTo> && '
+            'isIRI(?s) && '
+            f'STRSTARTS(STR(?s), "{DATASET_URI_BASE}") && '
+            'CONTAINS(STR(?s), "/structure/")'
+        )
+        object_filter = f'{object_filter} && !({structure_conforms_to})'
+        print(f"DEBUG: delete_concept side=object concept={concept_identifier}")
+        LindasAPIHelper.graphdb_update(build_delete_query(object_filter))
 
+        delete_subjects = f"""
+PREFIX dct: <http://purl.org/dc/terms/>
+DELETE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        ?s ?p ?o .
+    }}
+}}
+WHERE {{
+    GRAPH <{TARGET_GRAPH}> {{
+        {{
+            ?s ?p ?o .
+            FILTER ({concept_iri_filter("?s")})
+        }}
+        UNION
+        {{
+            ?owner dct:publisher ?publisher .
+            FILTER ({concept_iri_filter("?owner")})
+            FILTER(isIRI(?publisher) && STRSTARTS(STR(?publisher), "{AGENT_URI_BASE}"))
+            FILTER NOT EXISTS {{
+                ?other_owner dct:publisher ?publisher .
+                FILTER(!({concept_iri_filter("?other_owner")}))
+            }}
+            ?publisher ?p ?o .
+            BIND(?publisher AS ?s)
+        }}
+    }}
+}}
+"""
+        print(f"DEBUG: delete_concept side=subject concept={concept_identifier}")
+        LindasAPIHelper.graphdb_update(delete_subjects)
 
 class I14YAPIHelper:
 

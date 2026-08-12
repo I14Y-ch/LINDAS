@@ -36,6 +36,9 @@ BASE_URI = "https://register.ld.admin.ch/i14y/concept/"
 DATASET_URI_BASE = os.environ.get(
     "DATASET_URI_BASE", "https://register.ld.admin.ch/i14y/dataset/"
 ).rstrip("/") + "/"
+AGENT_URI_BASE = os.environ.get(
+    "AGENT_URI_BASE", "https://register.ld.admin.ch/i14y/agent/"
+).rstrip("/") + "/"
 
 SKOLEM_IDENTITY_BASE_URI = BASE_URI + "{concept_identifier}/.well-known/genid/{hash}"
 SKOLEM_VERSION_BASE_URI = BASE_URI + "{concept_identifier}/.well-known/genid/{hash}/version/{version}"

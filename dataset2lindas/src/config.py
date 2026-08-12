@@ -31,6 +31,7 @@ class DatasetConfig:
     user_agent: str
     dataset_theme_concept_identifier: str = "DV_DCAT_DATASET_THEME"
     dataset_theme_concept_version: str = "1.1.0"
+    agent_uri_base: str = "https://register.ld.admin.ch/i14y/agent/"
 
     @classmethod
     def from_env(cls) -> "DatasetConfig":
@@ -49,6 +50,10 @@ class DatasetConfig:
             + "/",
             dataservice_uri_base=os.environ.get(
                 "DATASERVICE_URI_BASE", "https://register.ld.admin.ch/i14y/dataservice/"
+            ).rstrip("/")
+            + "/",
+            agent_uri_base=os.environ.get(
+                "AGENT_URI_BASE", "https://register.ld.admin.ch/i14y/agent/"
             ).rstrip("/")
             + "/",
             dataset_theme_concept_identifier=os.environ.get(

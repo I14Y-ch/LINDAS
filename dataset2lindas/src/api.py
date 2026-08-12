@@ -196,6 +196,7 @@ WHERE {{
         dataset_uri = f"{self.config.dataset_uri_base}{identifier}"
         dataset_prefix = f"{dataset_uri}/"
         structure_uri = f"{dataset_uri}/structure"
+        agent_uri_base = self.config.agent_uri_base
         graph = self.config.target_graph
 
         def dataset_iri_filter(node_variable: str) -> str:
@@ -230,6 +231,17 @@ WHERE {{
       }}
       ?part ?p ?o .
       BIND(?part AS ?s)
+    }}
+    UNION
+    {{
+      <{dataset_uri}> dct:publisher ?publisher .
+      FILTER(isIRI(?publisher) && STRSTARTS(STR(?publisher), "{agent_uri_base}"))
+      FILTER NOT EXISTS {{
+        ?other_owner dct:publisher ?publisher .
+        FILTER(!({dataset_iri_filter("?other_owner")}))
+      }}
+      ?publisher ?p ?o .
+      BIND(?publisher AS ?s)
     }}
     UNION
     {{

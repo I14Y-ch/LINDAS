@@ -60,6 +60,10 @@ class DatasetRdfMapper:
     def dataservice_uri(self, dataservice_id: str) -> URIRef:
         return URIRef(f"{self.config.dataservice_uri_base}{dataservice_id}")
 
+    def agent_uri(self, agent_identifier: str) -> URIRef:
+        normalized = str(agent_identifier).strip()
+        return URIRef(f"{self.config.agent_uri_base}{quote(normalized, safe='-._~')}")
+
     def dataset_theme_uri(self, code: str) -> URIRef:
         safe_code = quote(code, safe="-._~")
         return URIRef(
@@ -291,10 +295,13 @@ class DatasetRdfMapper:
 
         publisher = dataset.get("publisher") or {}
         if publisher:
-            publisher_node = self._new_bnode("publisher", publisher)
-            graph.add((uri, DCTERMS.publisher, publisher_node))
-            graph.add((publisher_node, RDF.type, FOAF.Agent))
-            self._add_multilingual(graph, publisher_node, FOAF.name, publisher.get("name"))
+            publisher_identifier = publisher.get("identifier")
+            if not self._non_empty(publisher_identifier):
+                raise ValueError(f"Dataset {self._current_identifier} publisher has no identifier")
+            publisher_uri = self.agent_uri(str(publisher_identifier))
+            graph.add((uri, DCTERMS.publisher, publisher_uri))
+            graph.add((publisher_uri, RDF.type, FOAF.Agent))
+            self._add_multilingual(graph, publisher_uri, FOAF.name, publisher.get("name"))
 
         self._add_qualified_attributions(graph, uri, self._values(dataset.get("qualifiedAttributions")))
         self._add_qualified_relations(graph, uri, self._values(dataset.get("qualifiedRelations")))

@@ -8,6 +8,7 @@ from collections import defaultdict
 from rdflib import URIRef, BNode, Literal
 from rdflib.namespace import RDF
 import hashlib
+from urllib.parse import quote
 
 
 class StreamingTurtleWriter:
@@ -638,9 +639,16 @@ class ConceptMetadataManager:
         if "validTo" in concept_data:
             self.vm.graph.add((uri, SDO.validUntil, Literal(concept_data["validTo"], datatype=XSD.date)))
 
-        for lang, publisher_name in concept_data["publisher"]["name"].items():
+        publisher = concept_data.get("publisher") or {}
+        publisher_identifier = publisher.get("identifier")
+        if not is_valid_value(publisher_identifier):
+            raise ValueError(f"Concept {concept_data['id']} publisher has no identifier")
+        publisher_uri = URIRef(f"{AGENT_URI_BASE}{quote(str(publisher_identifier).strip(), safe='-._~')}")
+        self.vm.graph.add((uri, DCTERMS.publisher, publisher_uri))
+        self.vm.graph.add((publisher_uri, RDF.type, FOAF.Agent))
+        for lang, publisher_name in publisher.get("name", {}).items():
             if is_valid_value(publisher_name):
-                self.vm.graph.add((uri, DCTERMS.publisher, Literal(publisher_name, lang=lang)))
+                self.vm.graph.add((publisher_uri, FOAF.name, Literal(publisher_name, lang=lang)))
 
         # added Version and identity to the name of the Concept to differentiate
         modified_names = {}

@@ -116,6 +116,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("UNION", updates[0])
         self.assertIn("dct:hasPart ?part", updates[0])
         self.assertIn("FILTER NOT EXISTS", updates[0])
+        self.assertIn("dct:publisher ?publisher", updates[0])
+        self.assertIn("https://register.ld.admin.ch/i14y/agent/", updates[0])
         self.assertIn("VALUES (?relation ?resource_type)", updates[0])
         self.assertIn("?resource rdf:type ?resource_type", updates[0])
         self.assertIn("isIRI(?s)", updates[0])

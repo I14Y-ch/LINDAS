@@ -8,7 +8,7 @@ from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import DCTERMS, RDF, XSD
 
 from dataset2lindas.src.config import DatasetConfig
-from dataset2lindas.src.mapper import DCAT, DCATAP, INVALID_URI, SH, SPDX, VCARD, DatasetRdfMapper
+from dataset2lindas.src.mapper import DCAT, DCATAP, FOAF, INVALID_URI, SH, SPDX, VCARD, DatasetRdfMapper
 
 
 def make_config() -> DatasetConfig:
@@ -42,7 +42,7 @@ def dataset() -> dict:
         "issued": "2025-01-02T00:00:00+00:00",
         "keywords": [{"label": {"fr": "mot-clé"}}],
         "languages": [{"code": "fr"}],
-        "publisher": {"name": {"fr": "OFS"}},
+        "publisher": {"identifier": "CH1", "name": {"fr": "OFS"}},
         "temporalCoverage": [{"start": "2024-01-01T00:00:00+00:00", "end": "2024-12-31T00:00:00+00:00"}],
         "title": {"fr": "Jeu de données"},
         "themes": [{"uri": None}],
@@ -78,6 +78,10 @@ class DatasetRdfMapperTests(unittest.TestCase):
         self.assertIn((distribution, DCATAP.availability, URIRef("https://example.org/available")), self.graph)
         self.assertIn((distribution, DCAT.accessService, self.mapper.dataservice_uri("public-service")), self.graph)
         self.assertNotIn((distribution, DCAT.accessService, self.mapper.dataservice_uri("private-service")), self.graph)
+        publisher = self.mapper.agent_uri("CH1")
+        self.assertIn((self.uri, DCTERMS.publisher, publisher), self.graph)
+        self.assertIn((publisher, RDF.type, FOAF.Agent), self.graph)
+        self.assertIn((publisher, FOAF.name, Literal("OFS", lang="fr")), self.graph)
 
     def test_uses_blank_nodes_and_never_uses_version_link(self) -> None:
         contact = next(self.graph.objects(self.uri, DCAT.contactPoint))
