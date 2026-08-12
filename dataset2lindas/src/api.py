@@ -186,89 +186,88 @@ WHERE {{
         self.update(f"DROP GRAPH <{self.config.target_graph}>")
 
     def delete_dataset(self, identifier: str) -> None:
-        """Remove the dataset-owned namespace and its explicitly tracked externals."""
+        """Remove a dataset in two prefix-based SPARQL passes.
+
+        The first pass removes every locally owned subject and, from the same
+        query snapshot, the explicitly tracked external resources that became
+        orphaned. The second removes all incoming references to the dataset
+        namespace (including an optional catalogue membership).
+        """
         dataset_uri = f"{self.config.dataset_uri_base}{identifier}"
         dataset_prefix = f"{dataset_uri}/"
         structure_uri = f"{dataset_uri}/structure"
-        skolem_prefix = f"{dataset_uri}/.well-known/genid/"
         graph = self.config.target_graph
 
-        def delete_by_dataset_iri(node_variable: str) -> str:
-            node_filter = (
+        def dataset_iri_filter(node_variable: str) -> str:
+            return (
                 f'isIRI({node_variable}) && '
                 f'(STR({node_variable}) = "{dataset_uri}" || '
                 f'STRSTARTS(STR({node_variable}), "{dataset_prefix}"))'
             )
-            return f'''\
-DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
-WHERE {{
-  GRAPH <{graph}> {{
-    ?s ?p ?o .
-    FILTER ({node_filter})
-  }}
-}}'''
 
-        updates = [
-            # External structure subjects are indexed as parts. Their triples only
-            # disappear once no other structure still declares the same part.
-            f'''\
-PREFIX dct: <http://purl.org/dc/terms/>
-DELETE {{ GRAPH <{graph}> {{ ?part ?p ?o . }} }}
-WHERE {{
-  GRAPH <{graph}> {{
-    <{dataset_uri}> dct:conformsTo <{structure_uri}> .
-    <{structure_uri}> dct:hasPart ?part .
-    FILTER(isIRI(?part) &&
-      !(STR(?part) = "{dataset_uri}" || STRSTARTS(STR(?part), "{dataset_prefix}")))
-    FILTER NOT EXISTS {{
-      ?other_structure dct:hasPart ?part .
-      FILTER(?other_structure != <{structure_uri}>)
-    }}
-    ?part ?p ?o .
-  }}
-}}''',
-            # Keep the C# DCAT mapping, then remove only the auxiliary rdf:type
-            # assertions it created for external resources once their last local
-            # dataset/distribution link is gone.
-            f'''\
+        delete_subjects = f'''\
 PREFIX dcat: <http://www.w3.org/ns/dcat#>
 PREFIX dct: <http://purl.org/dc/terms/>
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX schema: <http://schema.org/>
-DELETE {{ GRAPH <{graph}> {{ ?resource rdf:type ?resource_type . }} }}
+DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
 WHERE {{
   GRAPH <{graph}> {{
-    VALUES (?relation ?resource_type) {{
-      (dcat:accessURL rdfs:Resource)
-      (dcat:downloadURL rdfs:Resource)
-      (dcat:landingPage foaf:Document)
-      (dct:conformsTo dct:standard)
-      (dct:isReferencedBy rdfs:Resource)
-      (dct:relation rdfs:Resource)
-      (foaf:page foaf:Document)
-      (schema:image schema:url)
+    {{
+      ?s ?p ?o .
+      FILTER ({dataset_iri_filter("?s")})
     }}
-    ?owner ?relation ?resource .
-    FILTER(isIRI(?owner) &&
-      (STR(?owner) = "{dataset_uri}" || STRSTARTS(STR(?owner), "{skolem_prefix}")))
-    FILTER(isIRI(?resource) &&
-      !(STR(?resource) = "{dataset_uri}" || STRSTARTS(STR(?resource), "{dataset_prefix}")))
-    ?resource rdf:type ?resource_type .
-    FILTER NOT EXISTS {{
-      ?other_owner ?relation ?resource .
-      FILTER(!isIRI(?other_owner) ||
-        (STR(?other_owner) != "{dataset_uri}" &&
-         !STRSTARTS(STR(?other_owner), "{skolem_prefix}")))
+    UNION
+    {{
+      <{dataset_uri}> dct:conformsTo <{structure_uri}> .
+      <{structure_uri}> dct:hasPart ?part .
+      FILTER(isIRI(?part) && !({dataset_iri_filter("?part")}))
+      FILTER NOT EXISTS {{
+        ?other_structure dct:hasPart ?part .
+        FILTER(?other_structure != <{structure_uri}>)
+      }}
+      ?part ?p ?o .
+      BIND(?part AS ?s)
+    }}
+    UNION
+    {{
+      VALUES (?relation ?resource_type) {{
+        (dcat:accessURL rdfs:Resource)
+        (dcat:downloadURL rdfs:Resource)
+        (dcat:landingPage foaf:Document)
+        (dct:conformsTo dct:standard)
+        (dct:isReferencedBy rdfs:Resource)
+        (dct:relation rdfs:Resource)
+        (foaf:page foaf:Document)
+        (schema:image schema:url)
+      }}
+      ?owner ?relation ?resource .
+      FILTER ({dataset_iri_filter("?owner")})
+      FILTER(isIRI(?resource) && !({dataset_iri_filter("?resource")}))
+      ?resource rdf:type ?resource_type .
+      FILTER NOT EXISTS {{
+        ?other_owner ?relation ?resource .
+        FILTER(!isIRI(?other_owner) || !({dataset_iri_filter("?other_owner")}))
+      }}
+      BIND(?resource AS ?s)
+      BIND(rdf:type AS ?p)
+      BIND(?resource_type AS ?o)
     }}
   }}
-}}''',
-            delete_by_dataset_iri("?o"),
-            delete_by_dataset_iri("?s"),
-        ]
-        for update in updates:
-            self.update(update)
+}}'''
+
+        delete_objects = f'''\
+DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    ?s ?p ?o .
+    FILTER ({dataset_iri_filter("?o")})
+  }}
+}}'''
+        self.update(delete_subjects)
+        self.update(delete_objects)
     def upload_turtle(self, file_path: str | Path) -> None:
         """Upload a Turtle artifact transactionally on Stardog and directly on GraphDB."""
         path = Path(file_path)
