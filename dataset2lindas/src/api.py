@@ -192,8 +192,9 @@ WHERE {{
         self.update(f"DROP GRAPH <{self.config.target_graph}>")
 
     def delete_dataset(self, identifier: str) -> None:
-        """Remove one dataset with the two lightweight prefix passes used for concepts."""
+        """Remove one dataset through indexed structure cleanup, prefix cleanup and catalogue cleanup."""
         dataset_uri = f"{self.config.dataset_uri_base}{identifier}"
+        structure_uri = f"{dataset_uri}/structure"
         graph = self.config.target_graph
 
         def prefix_filter(node_variable: str) -> str:
@@ -212,6 +213,21 @@ WHERE {{
   }}
 }}'''
 
+        delete_orphaned_structure_parts = f'''\
+PREFIX dct: <http://purl.org/dc/terms/>
+DELETE {{ GRAPH <{graph}> {{ ?part ?p ?o . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    <{dataset_uri}> dct:conformsTo <{structure_uri}> .
+    <{structure_uri}> dct:hasPart ?part .
+    FILTER(isIRI(?part) && !({prefix_filter("?part")}))
+    FILTER NOT EXISTS {{
+      ?other_structure dct:hasPart ?part .
+      FILTER(?other_structure != <{structure_uri}>)
+    }}
+    ?part ?p ?o .
+  }}
+}}'''
         delete_catalog_membership = f'''\
 PREFIX dcat: <http://www.w3.org/ns/dcat#>
 DELETE DATA {{
@@ -220,9 +236,12 @@ DELETE DATA {{
   }}
 }}'''
 
+        # dct:hasPart is our narrow ownership index for named subjects outside the
+        # dataset namespace. Run it before removing the structure index itself.
+        self.update(delete_orphaned_structure_parts)
         self.update(delete_by(prefix_filter("?s")))
-        # This exporter has no external inbound links other than the optional
-        # synthetic catalogue membership. Do not scan every object in the graph.
+        # This exporter has no other external inbound links to a dataset. Do not
+        # scan every graph object merely to remove optional catalogue membership.
         self.update(delete_catalog_membership)
     def upload_turtle(self, file_path: str | Path) -> None:
         """Upload a Turtle artifact transactionally on Stardog and directly on GraphDB."""

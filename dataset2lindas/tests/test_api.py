@@ -117,21 +117,24 @@ class ApiTests(unittest.TestCase):
         self.assertIn("text/turtle", session.get_calls[0][1]["headers"]["Accept"])
         self.assertIn("charset=utf-8", session.get_calls[0][1]["headers"]["Accept"])
 
-    def test_dataset_deletion_uses_two_lightweight_prefix_passes(self):
+    def test_dataset_deletion_uses_indexed_structure_cleanup_then_prefix_cleanup(self):
         session = Session()
         api = LindasDatasetsAPI(make_config(), session)
         api.delete_dataset("DATASET_1")
         updates = [call[1]["data"] for call in session.post_calls]
 
-        self.assertEqual(2, len(updates))
+        self.assertEqual(3, len(updates))
+        self.assertIn("dct:hasPart ?part", updates[0])
+        self.assertIn("<https://register.ld.admin.ch/i14y/dataset/DATASET_1/structure>", updates[0])
+        self.assertIn("FILTER NOT EXISTS", updates[0])
+        self.assertIn("?other_structure dct:hasPart ?part", updates[0])
         self.assertNotIn("UNION", updates[0])
-        self.assertNotIn("FILTER NOT EXISTS", updates[0])
-        self.assertIn("isIRI(?s)", updates[0])
-        self.assertIn('STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/dataset/DATASET_1")', updates[0])
-        self.assertIn("DELETE DATA", updates[1])
-        self.assertIn("dcat:dataset <https://register.ld.admin.ch/i14y/dataset/DATASET_1>", updates[1])
-        self.assertNotIn("?s", updates[1])
-        self.assertNotIn("FILTER", updates[1])
+        self.assertIn("isIRI(?s)", updates[1])
+        self.assertIn('STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/dataset/DATASET_1")', updates[1])
+        self.assertIn("DELETE DATA", updates[2])
+        self.assertIn("dcat:dataset <https://register.ld.admin.ch/i14y/dataset/DATASET_1>", updates[2])
+        self.assertNotIn("?s", updates[2])
+        self.assertNotIn("FILTER", updates[2])
 
 
 if __name__ == "__main__":
