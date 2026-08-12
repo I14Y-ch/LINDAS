@@ -14,7 +14,7 @@ The normal workflow scans every page of `GET /api/datasets`, retaining only the 
 - `CREATE_DATASET_CATALOG`: defaults to `false`. When `true`, the workflow writes `dcat:Catalog` membership triples to `DATASET_CATALOG_URI` (default `https://register.ld.admin.ch/i14y/catalog/datasets`). This toggle is independent from `CLEAR_GRAPH`.
 - `DATASET_THEME_CONCEPT_IDENTIFIER` / `DATASET_THEME_CONCEPT_VERSION`: defaults to `DV_DCAT_DATASET_THEME` / `1.1.0`. Theme codes are mapped to the corresponding versioned i14y concept IRIs.
 - Turtle is written through StreamingTurtleWriter; internal RDF blank nodes are deterministically skolemized below <dataset-uri>/.well-known/genid/. A replacement/removal can therefore delete the complete owned subgraph from the dataset identifier alone.
-- For each dataset, `GET /api/datasets/{datasetId}/structures/exports/TTL` is also requested. A `404` means that no structure exists. Its NodeShapes and named external subjects are indexed as `dct:hasPart` of `<dataset-uri>/structure`; blank nodes are skolemized below `<dataset-uri>/structure/.well-known/genid/`. Dataset-owned IRIs are removed by prefix, while an external indexed subject is removed only after its last structure owner.
+- For each dataset, `GET /api/datasets/{datasetId}/structures/exports/TTL` is also requested. A `404` means that no structure exists. Its NodeShapes and named external subjects are indexed as `dct:hasPart` of `<dataset-uri>/structure`; blank nodes are skolemized below `<dataset-uri>/structure/.well-known/genid/`. Dataset deletion is deliberately limited to two direct IRI-prefix passes (subjects, then objects) so it remains fast on LINDAS.
 
 For an ad-hoc RDF batch:
 

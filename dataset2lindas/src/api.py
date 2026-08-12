@@ -192,100 +192,30 @@ WHERE {{
         self.update(f"DROP GRAPH <{self.config.target_graph}>")
 
     def delete_dataset(self, identifier: str) -> None:
-        """Remove a dataset in two prefix-based SPARQL passes.
-
-        The first pass removes every locally owned subject and, from the same
-        query snapshot, the explicitly tracked external resources that became
-        orphaned. The second removes all incoming references to the dataset
-        namespace (including an optional catalogue membership).
-        """
+        """Remove one dataset with the two lightweight prefix passes used for concepts."""
         dataset_uri = f"{self.config.dataset_uri_base}{identifier}"
-        dataset_prefix = f"{dataset_uri}/"
-        structure_uri = f"{dataset_uri}/structure"
-        agent_uri_base = self.config.agent_uri_base
         graph = self.config.target_graph
 
-        def dataset_iri_filter(node_variable: str) -> str:
+        def prefix_filter(node_variable: str) -> str:
             return (
                 f'isIRI({node_variable}) && '
-                f'(STR({node_variable}) = "{dataset_uri}" || '
-                f'STRSTARTS(STR({node_variable}), "{dataset_prefix}"))'
+                f'STRSTARTS(STR({node_variable}), "{dataset_uri}")'
             )
 
-        delete_subjects = f'''\
-PREFIX dcat: <http://www.w3.org/ns/dcat#>
-PREFIX dct: <http://purl.org/dc/terms/>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX schema: <http://schema.org/>
-DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
-WHERE {{
-  GRAPH <{graph}> {{
-    {{
-      ?s ?p ?o .
-      FILTER ({dataset_iri_filter("?s")})
-    }}
-    UNION
-    {{
-      <{dataset_uri}> dct:conformsTo <{structure_uri}> .
-      <{structure_uri}> dct:hasPart ?part .
-      FILTER(isIRI(?part) && !({dataset_iri_filter("?part")}))
-      FILTER NOT EXISTS {{
-        ?other_structure dct:hasPart ?part .
-        FILTER(?other_structure != <{structure_uri}>)
-      }}
-      ?part ?p ?o .
-      BIND(?part AS ?s)
-    }}
-    UNION
-    {{
-      <{dataset_uri}> dct:publisher ?publisher .
-      FILTER(isIRI(?publisher) && STRSTARTS(STR(?publisher), "{agent_uri_base}"))
-      FILTER NOT EXISTS {{
-        ?other_owner dct:publisher ?publisher .
-        FILTER(!({dataset_iri_filter("?other_owner")}))
-      }}
-      ?publisher ?p ?o .
-      BIND(?publisher AS ?s)
-    }}
-    UNION
-    {{
-      VALUES (?relation ?resource_type) {{
-        (dcat:accessURL rdfs:Resource)
-        (dcat:downloadURL rdfs:Resource)
-        (dcat:landingPage foaf:Document)
-        (dct:conformsTo dct:standard)
-        (dct:isReferencedBy rdfs:Resource)
-        (dct:relation rdfs:Resource)
-        (foaf:page foaf:Document)
-        (schema:image schema:url)
-      }}
-      ?owner ?relation ?resource .
-      FILTER ({dataset_iri_filter("?owner")})
-      FILTER(isIRI(?resource) && !({dataset_iri_filter("?resource")}))
-      ?resource rdf:type ?resource_type .
-      FILTER NOT EXISTS {{
-        ?other_owner ?relation ?resource .
-        FILTER(!isIRI(?other_owner) || !({dataset_iri_filter("?other_owner")}))
-      }}
-      BIND(?resource AS ?s)
-      BIND(rdf:type AS ?p)
-      BIND(?resource_type AS ?o)
-    }}
-  }}
-}}'''
-
-        delete_objects = f'''\
+        def delete_by(filter_expression: str) -> str:
+            return f'''\
 DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
 WHERE {{
   GRAPH <{graph}> {{
     ?s ?p ?o .
-    FILTER ({dataset_iri_filter("?o")})
+    FILTER ({filter_expression})
   }}
 }}'''
-        self.update(delete_subjects)
-        self.update(delete_objects)
+
+        # Keep the operations deliberately simple: GraphDB plans these two prefix
+        # filters far better than a UNION containing global FILTER NOT EXISTS checks.
+        self.update(delete_by(prefix_filter("?s")))
+        self.update(delete_by(prefix_filter("?o")))
     def upload_turtle(self, file_path: str | Path) -> None:
         """Upload a Turtle artifact transactionally on Stardog and directly on GraphDB."""
         path = Path(file_path)
