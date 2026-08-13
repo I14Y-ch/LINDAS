@@ -1,0 +1,110 @@
+name: "[DATASETS GRAPHDB TEST] Full import and deletion check"
+
+on:
+  workflow_dispatch:
+
+# Do not run the destructive lifecycle check concurrently with the normal
+# incremental dataset update against the same GraphDB test graph.
+concurrency:
+  group: graphdb-test-datasets
+  cancel-in-progress: false
+
+jobs:
+  import-all-datasets:
+    uses: ./.github/workflows/dataset_reusable_workflow.yml
+    with:
+      CLEAR_GRAPH: true
+      CREATE_DATASET_CATALOG: false
+      LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas/statements"
+      LINDAS_QUERY_URL: "https://test.lindas.admin.ch/query"
+    secrets:
+      STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}
+      STARDOG_USER: ${{ secrets.GRAPHDB_USER }}
+
+  count-delete-and-verify-empty:
+    needs: import-all-datasets
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.10"
+      TARGET_GRAPH: "https://lindas.admin.ch/fso/i14y"
+      LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas/statements"
+      LINDAS_QUERY_URL: "https://test.lindas.admin.ch/query"
+      I14Y_DATASETS_API_URL: "https://api.i14y.admin.ch/api/datasets"
+      I14Y_DATASERVICES_API_URL: "https://api.i14y.admin.ch/api/dataservices"
+      CREATE_DATASET_CATALOG: "false"
+      CLEAR_GRAPH: "false"
+      STARDOG_USER: ${{ secrets.GRAPHDB_USER }}
+      STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Download the complete source inventory
+        uses: actions/download-artifact@v4
+        with:
+          name: dataset-sync-plan-${{ github.run_id }}
+          path: reconciliation
+      - name: Count triples after the complete import
+        run: |
+          python - <<'PY'
+          import os
+          from dataset2lindas.src.api import LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+
+          config = DatasetConfig.from_env()
+          rows = LindasDatasetsAPI(config).query(
+              f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{config.target_graph}> {{ ?s ?p ?o . }} }}"
+          )
+          count = int(rows[0]["count"]["value"])
+          print(f"Triples after import: {count}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              print(f"Triples after complete import: **{count}**", file=summary)
+          if count == 0:
+              raise RuntimeError("The complete import produced zero triples")
+          PY
+      - name: Delete every imported dataset and verify the graph is empty
+        run: |
+          python - <<'PY'
+          import os
+          from dataset2lindas.src.api import LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+          from dataset2lindas.src.synchronizer import SyncPlan
+
+          config = DatasetConfig.from_env()
+          plan = SyncPlan.read("reconciliation/dataset_sync_plan.json")
+          lindas = LindasDatasetsAPI(config)
+          failures = []
+          for index, identifier in enumerate(plan.source_identifiers, start=1):
+              try:
+                  lindas.delete_dataset(identifier)
+              except Exception as error:
+                  failures.append((identifier, str(error)))
+                  print(f"::error::Could not delete {identifier}: {error}")
+              if index % 100 == 0 or index == len(plan.source_identifiers):
+                  print(f"Deletion progress: {index}/{len(plan.source_identifiers)}")
+
+          try:
+              lindas.delete_orphaned_publisher_agents()
+          except Exception as error:
+              failures.append(("orphaned publisher agents", str(error)))
+              print(f"::error::Could not clean orphaned publisher agents: {error}")
+
+          rows = lindas.query(
+              f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{config.target_graph}> {{ ?s ?p ?o . }} }}"
+          )
+          remaining = int(rows[0]["count"]["value"])
+          print(f"Triples after deleting all datasets: {remaining}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              print(f"Datasets deleted: **{len(plan.source_identifiers)}**", file=summary)
+              print(f"Triples after deletion: **{remaining}**", file=summary)
+              if failures:
+                  print(f"Deletion errors: **{len(failures)}**", file=summary)
+
+          if failures or remaining != 0:
+              raise RuntimeError(
+                  f"Lifecycle check failed: {len(failures)} deletion error(s), {remaining} triple(s) remain"
+              )
+          PY

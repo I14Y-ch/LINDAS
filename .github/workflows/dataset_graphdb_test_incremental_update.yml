@@ -16,6 +16,10 @@ on:
         type: boolean
         default: false
 
+# Shares a lock with the destructive lifecycle check for this graph.
+concurrency:
+  group: graphdb-test-datasets
+  cancel-in-progress: false
 jobs:
   update-datasets:
     uses: ./.github/workflows/dataset_reusable_workflow.yml
