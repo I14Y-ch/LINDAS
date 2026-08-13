@@ -117,25 +117,27 @@ class ApiTests(unittest.TestCase):
         self.assertIn("text/turtle", session.get_calls[0][1]["headers"]["Accept"])
         self.assertIn("charset=utf-8", session.get_calls[0][1]["headers"]["Accept"])
 
-    def test_dataset_deletion_uses_indexed_structure_cleanup_then_prefix_cleanup(self):
+    def test_dataset_deletion_uses_indexed_structure_cleanup_then_local_traversal(self):
         session = Session()
-        api = LindasDatasetsAPI(make_config(), session)
-        api.delete_dataset("DATASET_1")
+        client = LindasDatasetsAPI(make_config(), session)
+
+        client.delete_dataset("DATASET_1")
+
         updates = [call[1]["data"] for call in session.post_calls]
-
         self.assertEqual(3, len(updates))
-        self.assertIn("dct:hasPart ?part", updates[0])
-        self.assertIn("<https://register.ld.admin.ch/i14y/dataset/DATASET_1/structure>", updates[0])
-        self.assertIn("FILTER NOT EXISTS", updates[0])
-        self.assertIn("?other_structure dct:hasPart ?part", updates[0])
-        self.assertNotIn("UNION", updates[0])
-        self.assertIn("isIRI(?s)", updates[1])
-        self.assertIn('STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/dataset/DATASET_1")', updates[1])
-        self.assertIn("DELETE DATA", updates[2])
-        self.assertIn("dcat:dataset <https://register.ld.admin.ch/i14y/dataset/DATASET_1>", updates[2])
-        self.assertNotIn("?s", updates[2])
-        self.assertNotIn("FILTER", updates[2])
+        external_cleanup, local_cleanup, catalog_cleanup = updates
+        self.assertIn("dct:hasPart ?part", external_cleanup)
+        self.assertIn("FILTER NOT EXISTS", external_cleanup)
+        self.assertIn("?part ?p ?o", external_cleanup)
 
+        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/dataset/DATASET_1> AS ?dataset)", local_cleanup)
+        self.assertIn("?dataset ?root_predicate ?start", local_cleanup)
+        self.assertIn("?start !(rdf:type|dct:publisher|dct:conformsTo", local_cleanup)
+        self.assertIn("STRSTARTS(STR(?s), STR(?dataset))", local_cleanup)
+        self.assertNotIn("FILTER(isIRI(?o)", local_cleanup)
+
+        self.assertIn("DELETE DATA", catalog_cleanup)
+        self.assertIn("dcat:dataset", catalog_cleanup)
 
     def test_orphaned_publisher_cleanup_is_limited_to_unreferenced_i14y_agents(self):
         session = Session()

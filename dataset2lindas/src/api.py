@@ -192,7 +192,7 @@ WHERE {{
         self.update(f"DROP GRAPH <{self.config.target_graph}>")
 
     def delete_dataset(self, identifier: str) -> None:
-        """Remove one dataset through indexed structure cleanup, prefix cleanup and catalogue cleanup."""
+        """Remove one dataset through indexed external cleanup and local graph traversal."""
         dataset_uri = f"{self.config.dataset_uri_base}{identifier}"
         structure_uri = f"{dataset_uri}/structure"
         graph = self.config.target_graph
@@ -203,15 +203,11 @@ WHERE {{
                 f'STRSTARTS(STR({node_variable}), "{dataset_uri}")'
             )
 
-        def delete_by(filter_expression: str) -> str:
-            return f'''\
-DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
-WHERE {{
-  GRAPH <{graph}> {{
-    ?s ?p ?o .
-    FILTER ({filter_expression})
-  }}
-}}'''
+        local_subgraph_path = """!(rdf:type|dct:publisher|dct:conformsTo|dcat:theme|
+          dcat:accessRights|dcat:accessService|dcat:accessURL|
+          dcat:downloadURL|dcat:landingPage|dct:relation|
+          dct:isReferencedBy|foaf:page|schema:image|sh:path|
+          sh:class|sh:datatype|owl:imports)*"""
 
         delete_orphaned_structure_parts = f'''\
 PREFIX dct: <http://purl.org/dc/terms/>
@@ -228,6 +224,31 @@ WHERE {{
     ?part ?p ?o .
   }}
 }}'''
+        delete_local_subgraph = f'''\
+PREFIX dcat: <http://www.w3.org/ns/dcat#>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX schema: <http://schema.org/>
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+DELETE {{ GRAPH <{graph}> {{ ?s ?p ?o . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    BIND(<{dataset_uri}> AS ?dataset)
+    {{
+      BIND(?dataset AS ?s)
+    }}
+    UNION
+    {{
+      ?dataset ?root_predicate ?start .
+      FILTER(isIRI(?start) && STRSTARTS(STR(?start), STR(?dataset)))
+      ?start {local_subgraph_path} ?s .
+      FILTER(isIRI(?s) && STRSTARTS(STR(?s), STR(?dataset)))
+    }}
+    ?s ?p ?o .
+  }}
+}}'''
         delete_catalog_membership = f'''\
 PREFIX dcat: <http://www.w3.org/ns/dcat#>
 DELETE DATA {{
@@ -236,12 +257,10 @@ DELETE DATA {{
   }}
 }}'''
 
-        # dct:hasPart is our narrow ownership index for named subjects outside the
-        # dataset namespace. Run it before removing the structure index itself.
+        # The backend prunes every structure triple that is not reachable from
+        # its root. Follow that local closure instead of scanning all subjects.
         self.update(delete_orphaned_structure_parts)
-        self.update(delete_by(prefix_filter("?s")))
-        # This exporter has no other external inbound links to a dataset. Do not
-        # scan every graph object merely to remove optional catalogue membership.
+        self.update(delete_local_subgraph)
         self.update(delete_catalog_membership)
     def delete_orphaned_publisher_agents(self) -> None:
         """Remove i14y publisher agents with no remaining dataset or concept owner."""
