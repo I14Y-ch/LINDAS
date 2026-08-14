@@ -178,18 +178,31 @@ WHERE {{
         return url if url.endswith("/update") else f"{url}/update"
 
     def update(self, sparql: str) -> None:
-        response = self.session.post(
-            self._update_url(),
-            data=sparql,
-            headers={"Content-Type": "application/sparql-update", "User-Agent": self.config.user_agent},
-            auth=self._auth,
-            timeout=300,
-            verify=False if self.config.debug_local_test else True,
-        )
-        response.raise_for_status()
+        # Keep this aligned with the retry policy used by the concept exporter.
+        # Dataset updates are DROP/DELETE operations and can safely be replayed
+        # after a transient connection failure.
+        retries = max(1, int(os.environ.get("GRAPHDB_UPDATE_RETRIES", "1")))
+        backoff_min = float(os.environ.get("GRAPHDB_UPDATE_BACKOFF_MIN", "0.5"))
+        backoff_max = float(os.environ.get("GRAPHDB_UPDATE_BACKOFF_MAX", "1.5"))
 
+        for attempt in range(1, retries + 1):
+            try:
+                response = self.session.post(
+                    self._update_url(),
+                    data=sparql,
+                    headers={"Content-Type": "application/sparql-update", "User-Agent": self.config.user_agent},
+                    auth=self._auth,
+                    timeout=300,
+                    verify=False if self.config.debug_local_test else True,
+                )
+                response.raise_for_status()
+                return
+            except Exception:
+                if attempt == retries:
+                    raise
+                sleep(random.uniform(backoff_min, backoff_max))
     def clear_graph(self) -> None:
-        self.update(f"DROP GRAPH <{self.config.target_graph}>")
+        self.update(f"DROP SILENT GRAPH <{self.config.target_graph}>")
 
     def delete_dataset(self, identifier: str) -> None:
         """Remove one dataset through indexed external cleanup and local graph traversal."""

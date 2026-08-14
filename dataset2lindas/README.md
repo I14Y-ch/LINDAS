@@ -10,6 +10,7 @@ The normal workflow scans every page of `GET /api/datasets`, retaining only the 
 - `LINDAS_QUERY_URL`, `LINDAS_UPDATE_URL`, `STARDOG_USER`, `STARDOG_PASSWORD`: LINDAS connection.
 - `TARGET_GRAPH`: defaults to `https://lindas.admin.ch/fso/i14y`.
 - `I14Y_MODIFIED_LOOKBACK_HOURS`: change window; defaults to 24 hours, or 96 hours on Monday.
+- `GRAPHDB_UPDATE_RETRIES`, `GRAPHDB_UPDATE_BACKOFF_MIN` and `GRAPHDB_UPDATE_BACKOFF_MAX`: retries for idempotent SPARQL updates such as `DROP GRAPH` and dataset deletions. The workflows use 3 attempts.
 - `AGENT_URI_BASE`: defaults to `https://register.ld.admin.ch/i14y/agent/`. Publishers use their i14y `identifier` below this base, so datasets and concepts share the same `foaf:Agent`.
 - `CREATE_DATASET_CATALOG`: defaults to `false`. When `true`, the workflow writes `dcat:Catalog` membership triples to `DATASET_CATALOG_URI` (default `https://register.ld.admin.ch/i14y/catalog/datasets`). This toggle is independent from `CLEAR_GRAPH`.
 - `DATASET_THEME_CONCEPT_IDENTIFIER` / `DATASET_THEME_CONCEPT_VERSION`: defaults to `DV_DCAT_DATASET_THEME` / `1.1.0`. Theme codes are mapped to the corresponding versioned i14y concept IRIs.

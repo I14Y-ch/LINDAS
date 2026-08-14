@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import unittest
+from unittest.mock import patch
 
 from dataset2lindas.src.api import I14YDatasetsAPI, LindasDatasetsAPI
 from dataset2lindas.src.config import DatasetConfig
@@ -117,6 +119,24 @@ class ApiTests(unittest.TestCase):
         self.assertIn("text/turtle", session.get_calls[0][1]["headers"]["Accept"])
         self.assertIn("charset=utf-8", session.get_calls[0][1]["headers"]["Accept"])
 
+    def test_clear_graph_retries_transient_update_failures(self):
+        class FlakySession(Session):
+            def post(self, url, **kwargs):
+                self.post_calls.append((url, kwargs))
+                if len(self.post_calls) == 1:
+                    raise ConnectionError("temporary GraphDB disconnect")
+                return Response()
+
+        session = FlakySession()
+        api = LindasDatasetsAPI(make_config(), session)
+        with patch.dict(os.environ, {"GRAPHDB_UPDATE_RETRIES": "2"}), patch(
+            "dataset2lindas.src.api.sleep"
+        ) as sleep:
+            api.clear_graph()
+
+        self.assertEqual(2, len(session.post_calls))
+        self.assertEqual("DROP SILENT GRAPH <https://lindas.example/graph>", session.post_calls[0][1]["data"])
+        self.assertEqual(1, sleep.call_count)
     def test_dataset_deletion_uses_indexed_structure_cleanup_then_local_traversal(self):
         session = Session()
         client = LindasDatasetsAPI(make_config(), session)

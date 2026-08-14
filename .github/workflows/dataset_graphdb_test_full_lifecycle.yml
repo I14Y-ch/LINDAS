@@ -33,6 +33,9 @@ jobs:
       I14Y_DATASERVICES_API_URL: "https://api.i14y.admin.ch/api/dataservices"
       CREATE_DATASET_CATALOG: "false"
       CLEAR_GRAPH: "false"
+      GRAPHDB_UPDATE_RETRIES: "3"
+      GRAPHDB_UPDATE_BACKOFF_MIN: "0.5"
+      GRAPHDB_UPDATE_BACKOFF_MAX: "1.5"
       STARDOG_USER: ${{ secrets.GRAPHDB_USER }}
       STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}
     steps:
