@@ -28,6 +28,15 @@ class VocabularyProtectionTests(unittest.TestCase):
         self.assertFalse(result)
         update.assert_not_called()
 
+    def test_force_delete_bypasses_protected_vocabulary_guard(self) -> None:
+        with patch.object(I14YAPIHelper, "get_protected_vocabulary_versions") as protected, patch.object(
+            LindasAPIHelper, "get_lindas_concept_versions"
+        ) as lindas_versions, patch.object(LindasAPIHelper, "graphdb_update") as update:
+            LindasAPIHelper.delete_concept("DV_DCAT_DATASET_THEME", force=True)
+
+        protected.assert_not_called()
+        lindas_versions.assert_not_called()
+        self.assertEqual(2, update.call_count)
     def test_unprotected_vocabulary_keeps_existing_delete_behavior(self) -> None:
         with patch.object(I14YAPIHelper, "get_protected_vocabulary_versions", return_value=set()), patch.object(
             LindasAPIHelper,

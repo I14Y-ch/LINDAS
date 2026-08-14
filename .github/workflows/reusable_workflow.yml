@@ -34,6 +34,9 @@ env:
   LINDAS_QUERY_URL: ${{ inputs.LINDAS_QUERY_URL }}
   BASE_API_URL: ${{ inputs.BASE_API_URL }}
   STATUSES: ${{ inputs.STATUSES }}
+  GRAPHDB_UPDATE_RETRIES: "3"
+  GRAPHDB_UPDATE_BACKOFF_MIN: "0.5"
+  GRAPHDB_UPDATE_BACKOFF_MAX: "1.5"
 
 jobs:
   get-concepts:
@@ -273,7 +276,7 @@ jobs:
 
           print(f'Dropping graph: {target_graph}')
 
-          LindasAPIHelper.graphdb_update(f"DROP GRAPH <{target_graph}>")
+          LindasAPIHelper.graphdb_update(f"DROP SILENT GRAPH <{target_graph}>")
 
           print(f"Graph {target_graph} dropped successfully")
 

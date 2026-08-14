@@ -1,0 +1,125 @@
+name: "[CONCEPTS GRAPHDB TEST] Full import and deletion check"
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: graphdb-test-concepts
+  cancel-in-progress: false
+
+jobs:
+  import-all-concepts:
+    uses: ./.github/workflows/reusable_workflow.yml
+    with:
+      CLEAR_GRAPH: true
+      LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas/statements"
+      LINDAS_QUERY_URL: "https://test.lindas.admin.ch/query"
+      BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
+      STATUSES: "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded"
+    secrets:
+      STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}
+      STARDOG_USER: ${{ secrets.GRAPHDB_USER }}
+
+  count-delete-and-verify-empty:
+    needs: import-all-concepts
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.10"
+      TARGET_GRAPH: "https://lindas.admin.ch/fso/i14y"
+      LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas/statements"
+      LINDAS_QUERY_URL: "https://test.lindas.admin.ch/query"
+      BASE_API_URL: "https://api.i14y.admin.ch/api/public/v1/concepts/"
+      STATUSES: "Qualified,Standard,PreferredStandard,Retired,Candidate,Superseded,Recorded"
+      GRAPHDB_UPDATE_RETRIES: "3"
+      GRAPHDB_UPDATE_BACKOFF_MIN: "0.5"
+      GRAPHDB_UPDATE_BACKOFF_MAX: "1.5"
+      STARDOG_USER: ${{ secrets.GRAPHDB_USER }}
+      STARDOG_PASSWORD: ${{ secrets.GRAPHDB_PASSWORD_INT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Count triples after the complete import
+        run: |
+          python - <<'PY'
+          import os
+          from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
+
+          target_graph = os.environ["TARGET_GRAPH"]
+          rows = LindasAPIHelper.lindas_query(
+              f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{target_graph}> {{ ?s ?p ?o . }} }}"
+          )
+          count = int(rows[0]["count"]["value"])
+          print(f"Triples after import: {count}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              print(f"Triples after complete import: **{count}**", file=summary)
+          if count == 0:
+              raise RuntimeError("The complete import produced zero triples")
+          PY
+      - name: Delete every imported concept and verify the graph is empty
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+          from concept2sharedDimension.src.versioning.config import I14Y_USER_AGENT
+          from concept2sharedDimension.src.versioning.utils import I14YAPIHelper, LindasAPIHelper
+
+          concepts = I14YAPIHelper.get_all_concepts()
+          identifiers = sorted({concept["identifiers"][0] for concept in concepts})
+          failures = []
+          for index, identifier in enumerate(identifiers, start=1):
+              try:
+                  LindasAPIHelper.delete_concept(identifier, force=True)
+              except Exception as error:
+                  failures.append((identifier, str(error)))
+                  print(f"::error::Could not delete {identifier}: {error}")
+              if index % 100 == 0 or index == len(identifiers):
+                  print(f"Deletion progress: {index}/{len(identifiers)}")
+
+          target_graph = os.environ["TARGET_GRAPH"]
+          rows = LindasAPIHelper.lindas_query(
+              f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{target_graph}> {{ ?s ?p ?o . }} }}"
+          )
+          remaining = int(rows[0]["count"]["value"])
+          print(f"Triples after deleting all concepts: {remaining}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              print(f"Concepts deleted: **{len(identifiers)}**", file=summary)
+              print(f"Triples after deletion: **{remaining}**", file=summary)
+              if failures:
+                  print(f"Deletion errors: **{len(failures)}**", file=summary)
+
+          if remaining != 0:
+              construct = (
+                  f"CONSTRUCT {{ ?s ?p ?o }} "
+                  f"WHERE {{ GRAPH <{target_graph}> {{ ?s ?p ?o . }} }}"
+              )
+              response = requests.post(
+                  os.environ["LINDAS_QUERY_URL"],
+                  data={"query": construct},
+                  headers={
+                      "Accept": "application/n-triples",
+                      "Accept-Encoding": "identity",
+                      "User-Agent": I14Y_USER_AGENT,
+                  },
+                  timeout=300,
+              )
+              response.raise_for_status()
+              with open("remaining_graph.nt", "wb") as dump:
+                  dump.write(response.content)
+              print("Wrote remaining_graph.nt")
+
+          if failures or remaining != 0:
+              raise RuntimeError(
+                  f"Lifecycle check failed: {len(failures)} deletion error(s), {remaining} triple(s) remain"
+              )
+          PY
+      - name: Archive remaining graph
+        if: ${{ failure() && hashFiles('remaining_graph.nt') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: concept-lifecycle-remaining-graph-${{ github.run_id }}
+          path: remaining_graph.nt
+          retention-days: 7

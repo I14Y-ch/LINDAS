@@ -446,18 +446,19 @@ WHERE {{
         return LindasAPIHelper.lindas_concept_attributes[concept_identifier]
 
     @staticmethod
-    def delete_concept(concept_identifier):
-        protected_versions = I14YAPIHelper.get_protected_vocabulary_versions()
-        lindas_versions = LindasAPIHelper.get_lindas_concept_versions().get(concept_identifier, [])
-        matched_versions = sorted(
-            version for version in lindas_versions if (concept_identifier, version) in protected_versions
-        )
-        if matched_versions:
-            print(
-                f"DEBUG: skip delete_concept for protected vocabulary {concept_identifier} "
-                f"version(s) {', '.join(matched_versions)}"
+    def delete_concept(concept_identifier, *, force=False):
+        if not force:
+            protected_versions = I14YAPIHelper.get_protected_vocabulary_versions()
+            lindas_versions = LindasAPIHelper.get_lindas_concept_versions().get(concept_identifier, [])
+            matched_versions = sorted(
+                version for version in lindas_versions if (concept_identifier, version) in protected_versions
             )
-            return False
+            if matched_versions:
+                print(
+                    f"DEBUG: skip delete_concept for protected vocabulary {concept_identifier} "
+                    f"version(s) {', '.join(matched_versions)}"
+                )
+                return False
         print(f"DEBUG: delete_concept concept {concept_identifier}")
         concept_base = f"{BASE_URI}{concept_identifier}"
 
