@@ -4,6 +4,9 @@ import os
 import unittest
 from unittest.mock import patch
 
+from rdflib import ConjunctiveGraph, URIRef
+from rdflib.namespace import DCAT, DCTERMS, RDF, RDFS
+
 from dataset2lindas.src.api import I14YDatasetsAPI, LindasDatasetsAPI
 from dataset2lindas.src.config import DatasetConfig
 
@@ -137,15 +140,21 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(2, len(session.post_calls))
         self.assertEqual("DROP SILENT GRAPH <https://lindas.example/graph>", session.post_calls[0][1]["data"])
         self.assertEqual(1, sleep.call_count)
-    def test_dataset_deletion_uses_indexed_structure_cleanup_then_local_traversal(self):
+    def test_dataset_deletion_cleans_last_owned_external_mapping_types(self):
         session = Session()
         client = LindasDatasetsAPI(make_config(), session)
 
         client.delete_dataset("DATASET_1")
 
         updates = [call[1]["data"] for call in session.post_calls]
-        self.assertEqual(3, len(updates))
-        external_cleanup, local_cleanup, catalog_cleanup = updates
+        self.assertEqual(4, len(updates))
+        mapping_cleanup, external_cleanup, local_cleanup, catalog_cleanup = updates
+        self.assertIn("VALUES (?owner_predicate ?resource_type)", mapping_cleanup)
+        self.assertIn("(dcat:accessURL rdfs:Resource)", mapping_cleanup)
+        self.assertIn("(foaf:page foaf:Document)", mapping_cleanup)
+        self.assertIn("?resource rdf:type ?resource_type", mapping_cleanup)
+        self.assertIn("?other_structure dct:hasPart ?resource", mapping_cleanup)
+
         self.assertIn("dct:hasPart ?part", external_cleanup)
         self.assertIn("FILTER NOT EXISTS", external_cleanup)
         self.assertIn("?part ?p ?o", external_cleanup)
@@ -158,7 +167,33 @@ class ApiTests(unittest.TestCase):
 
         self.assertIn("DELETE DATA", catalog_cleanup)
         self.assertIn("dcat:dataset", catalog_cleanup)
+    def test_mapping_resource_type_is_removed_only_with_its_last_dataset_owner(self):
+        config = make_config()
+        graph = ConjunctiveGraph()
+        target = graph.get_context(URIRef(config.target_graph))
+        first_dataset = URIRef(f"{config.dataset_uri_base}FIRST")
+        second_dataset = URIRef(f"{config.dataset_uri_base}SECOND")
+        shared_url = URIRef("https://example.org/shared-download")
 
+        for dataset in (first_dataset, second_dataset):
+            target.add((dataset, RDF.type, DCAT.Dataset))
+            target.add((dataset, DCTERMS.relation, shared_url))
+        target.add((shared_url, RDF.type, RDFS.Resource))
+
+        first_session = Session()
+        LindasDatasetsAPI(config, first_session).delete_dataset("FIRST")
+        graph.update(first_session.post_calls[0][1]["data"])
+        self.assertIn((shared_url, RDF.type, RDFS.Resource), target)
+
+        # The remaining updates delete the local FIRST subgraph. RDFLib's
+        # property-path UPDATE evaluator is broader than GraphDB's, so model
+        # that local phase directly and keep this test focused on ownership.
+        target.remove((first_dataset, None, None))
+
+        second_session = Session()
+        LindasDatasetsAPI(config, second_session).delete_dataset("SECOND")
+        graph.update(second_session.post_calls[0][1]["data"])
+        self.assertNotIn((shared_url, RDF.type, RDFS.Resource), target)
     def test_orphaned_publisher_cleanup_is_limited_to_unreferenced_i14y_agents(self):
         session = Session()
         api = LindasDatasetsAPI(make_config(), session)

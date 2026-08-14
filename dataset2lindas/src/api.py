@@ -222,6 +222,58 @@ WHERE {{
           dct:isReferencedBy|foaf:page|schema:image|sh:path|
           sh:class|sh:datatype|owl:imports)*"""
 
+        # _add_resources adds only an rdf:type triple to an external URI. Keep it
+        # while another dataset or structure still owns that same resource.
+        delete_orphaned_mapping_resource_types = f'''PREFIX dcat: <http://www.w3.org/ns/dcat#>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
+DELETE {{ GRAPH <{graph}> {{ ?resource rdf:type ?resource_type . }} }}
+WHERE {{
+  GRAPH <{graph}> {{
+    VALUES (?owner_predicate ?resource_type) {{
+      (dct:conformsTo dct:standard)
+      (foaf:page foaf:Document)
+      (schema:image schema:url)
+      (dct:isReferencedBy rdfs:Resource)
+      (dct:relation rdfs:Resource)
+      (dcat:landingPage foaf:Document)
+      (dcat:accessURL rdfs:Resource)
+      (dcat:downloadURL rdfs:Resource)
+    }}
+    {{
+      <{dataset_uri}> ?owner_predicate ?resource .
+    }}
+    UNION
+    {{
+      <{dataset_uri}> dcat:distribution ?distribution .
+      ?distribution ?owner_predicate ?resource .
+    }}
+    FILTER(isIRI(?resource) && !({prefix_filter("?resource")}))
+    ?resource rdf:type ?resource_type .
+    FILTER NOT EXISTS {{
+      {{
+        ?other_dataset a dcat:Dataset ;
+                       ?owner_predicate ?resource .
+        FILTER(?other_dataset != <{dataset_uri}>)
+      }}
+      UNION
+      {{
+        ?other_dataset a dcat:Dataset ;
+                       dcat:distribution ?other_distribution .
+        ?other_distribution ?owner_predicate ?resource .
+        FILTER(?other_dataset != <{dataset_uri}>)
+      }}
+      UNION
+      {{
+        ?other_structure dct:hasPart ?resource .
+        FILTER(?other_structure != <{structure_uri}>)
+      }}
+    }}
+  }}
+}}'''
         delete_orphaned_structure_parts = f'''\
 PREFIX dct: <http://purl.org/dc/terms/>
 DELETE {{ GRAPH <{graph}> {{ ?part ?p ?o . }} }}
@@ -272,6 +324,7 @@ DELETE DATA {{
 
         # The backend prunes every structure triple that is not reachable from
         # its root. Follow that local closure instead of scanning all subjects.
+        self.update(delete_orphaned_mapping_resource_types)
         self.update(delete_orphaned_structure_parts)
         self.update(delete_local_subgraph)
         self.update(delete_catalog_membership)
