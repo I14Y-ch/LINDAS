@@ -1,4 +1,5 @@
 import heapq
+import json
 import random
 import re
 from time import time, sleep
@@ -475,17 +476,34 @@ WHERE {{
                 f'(STR({node_variable}) = "{concept_base}" || STRSTARTS(STR({node_variable}), "{concept_base}/"))'
             )
 
-        # All generated concept resources are skolem IRIs below concept_base.
-        # Shared/external resources deliberately end a path.
-        local_path = """!(rdf:type|dct:publisher|dct:relation|dct:isReferencedBy|
-          dct:conformsTo|owl:imports|owl:sameAs|skos:exactMatch|
-          skos:closeMatch|skos:relatedMatch|schema:sameAs|schema:url|
-          foaf:page|oa:hasTarget|sh:class|sh:datatype|sh:path)*"""
+        # Traverse only predicates emitted by the concept mapper. A positive
+        # path cannot escape through the common I14Y catalogue or external IRIs.
+        concept_identifier_literal = json.dumps(str(concept_identifier))
+        owned_path = """(
+          vl:Version|vl:Identity|
+          schema:hasPart|schema:hasDefinedTerm|schema:member|schema:isPartOf|schema:inDefinedTermSet|
+          skos:member|skos:broader|skos:narrower|skos:topConceptOf|skos:inScheme|
+          xkos:level|
+          cube:inHierarchy|cube:hierarchyRoot|cube:nextInHierarchy|
+          sh:property|
+          dct:subject|dct:conformsTo|
+          oa:hasBody|
+          rdf:rest
+        )*"""
+        owned_roots = f"""
+        {{
+          BIND(<{concept_base}> AS ?root)
+        }}
+        UNION
+        {{
+          ?root a schema:DefinedTermSet, vl:Version ;
+                schema:identifier {concept_identifier_literal} .
+        }}"""
 
-        # Resolve the owned local closure before joining on its objects. This
-        # replaces the former full-graph STRSTARTS(?object) scan. Dataset
-        # structure conformsTo links intentionally remain until their dataset
-        # is deleted.
+        # Materialize every locally owned node before joining it as an object.
+        # This avoids GraphDB reordering the query into a full graph scan.
+        # Dataset structure conformsTo links intentionally remain until their
+        # dataset is deleted.
         structure_conforms_to = (
             '?incoming_predicate = <http://purl.org/dc/terms/conformsTo> && '
             'isIRI(?incoming_subject) && '
@@ -493,32 +511,32 @@ WHERE {{
             'CONTAINS(STR(?incoming_subject), "/structure/")'
         )
         delete_incoming = f"""
+PREFIX cube: <https://cube.link/meta/>
 PREFIX dct: <http://purl.org/dc/terms/>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX oa: <http://www.w3.org/ns/oa#>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX oa: <https://www.w3.org/ns/oa#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX schema: <http://schema.org/>
 PREFIX sh: <http://www.w3.org/ns/shacl#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX vl: <https://version.link/>
+PREFIX xkos: <http://rdf-vocabulary.ddialliance.org/xkos#>
 DELETE {{
   GRAPH <{TARGET_GRAPH}> {{
     ?incoming_subject ?incoming_predicate ?target .
   }}
 }}
 WHERE {{
+  {{
+    SELECT DISTINCT ?target
+    WHERE {{
+      GRAPH <{TARGET_GRAPH}> {{
+        {owned_roots}
+        ?root {owned_path} ?target .
+        FILTER(isIRI(?target) && STRSTARTS(STR(?target), "{concept_base}"))
+      }}
+    }}
+  }}
   GRAPH <{TARGET_GRAPH}> {{
-    BIND(<{concept_base}> AS ?concept)
-    {{
-      BIND(?concept AS ?target)
-    }}
-    UNION
-    {{
-      ?concept ?root_predicate ?start .
-      FILTER(isIRI(?start) && STRSTARTS(STR(?start), STR(?concept)))
-      ?start {local_path} ?target .
-      FILTER(isIRI(?target) && STRSTARTS(STR(?target), STR(?concept)))
-    }}
     ?incoming_subject ?incoming_predicate ?target .
     FILTER(!({structure_conforms_to}))
   }}
@@ -528,35 +546,41 @@ WHERE {{
         LindasAPIHelper.graphdb_update(delete_incoming)
 
         delete_subjects = f"""
+PREFIX cube: <https://cube.link/meta/>
 PREFIX dct: <http://purl.org/dc/terms/>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-PREFIX oa: <http://www.w3.org/ns/oa#>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX oa: <https://www.w3.org/ns/oa#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX schema: <http://schema.org/>
 PREFIX sh: <http://www.w3.org/ns/shacl#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX vl: <https://version.link/>
+PREFIX xkos: <http://rdf-vocabulary.ddialliance.org/xkos#>
 DELETE {{
   GRAPH <{TARGET_GRAPH}> {{
     ?s ?p ?o .
   }}
 }}
 WHERE {{
-  GRAPH <{TARGET_GRAPH}> {{
-    BIND(<{concept_base}> AS ?concept)
+  {{
     {{
-      BIND(?concept AS ?s)
+      SELECT DISTINCT ?s
+      WHERE {{
+        GRAPH <{TARGET_GRAPH}> {{
+          {owned_roots}
+          ?root {owned_path} ?s .
+          FILTER(isIRI(?s) && STRSTARTS(STR(?s), "{concept_base}"))
+        }}
+      }}
     }}
-    UNION
-    {{
-      ?concept ?root_predicate ?start .
-      FILTER(isIRI(?start) && STRSTARTS(STR(?start), STR(?concept)))
-      ?start {local_path} ?s .
-      FILTER(isIRI(?s) && STRSTARTS(STR(?s), STR(?concept)))
+    GRAPH <{TARGET_GRAPH}> {{
+      ?s ?p ?o .
     }}
-    UNION
-    {{
-      ?concept dct:publisher ?publisher .
+  }}
+  UNION
+  {{
+    GRAPH <{TARGET_GRAPH}> {{
+      {owned_roots}
+      ?root dct:publisher ?publisher .
       FILTER(isIRI(?publisher) && STRSTARTS(STR(?publisher), "{AGENT_URI_BASE}"))
       FILTER NOT EXISTS {{
         ?other_owner dct:publisher ?publisher .

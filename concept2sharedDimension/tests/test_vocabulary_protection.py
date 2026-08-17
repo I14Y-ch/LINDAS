@@ -40,10 +40,11 @@ class VocabularyProtectionTests(unittest.TestCase):
         lindas_versions.assert_not_called()
         self.assertEqual(2, update.call_count)
         query = update.call_args_list[1].args[0]
-        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/concept/LIFECYCLE_TEST> AS ?concept)", query)
-        self.assertIn("?concept ?root_predicate ?start", query)
-        self.assertIn("?start !(rdf:type|dct:publisher", query)
-        self.assertNotIn("?s ?p ?o .\n            FILTER", query)
+        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/concept/LIFECYCLE_TEST> AS ?root)", query)
+        self.assertIn("SELECT DISTINCT ?s", query)
+        self.assertIn("vl:Version|vl:Identity", query)
+        self.assertIn("PREFIX oa: <https://www.w3.org/ns/oa#>", query)
+        self.assertNotIn("!(rdf:type|", query)
     def test_unprotected_vocabulary_keeps_existing_delete_behavior(self) -> None:
         with patch.object(I14YAPIHelper, "get_protected_vocabulary_versions", return_value=set()), patch.object(
             LindasAPIHelper,
@@ -89,7 +90,7 @@ class VocabularyProtectionTests(unittest.TestCase):
             LindasAPIHelper.delete_concept("OTHER")
 
         subject_delete = update.call_args_list[1].args[0]
-        self.assertIn("?concept dct:publisher ?publisher", subject_delete)
+        self.assertIn("?root dct:publisher ?publisher", subject_delete)
         self.assertIn(AGENT_URI_BASE, subject_delete)
         self.assertIn("FILTER NOT EXISTS", subject_delete)
     def test_dataset_structure_conforms_to_link_is_preserved_when_deleting_concept(self) -> None:
@@ -101,7 +102,10 @@ class VocabularyProtectionTests(unittest.TestCase):
             LindasAPIHelper.delete_concept("OTHER")
 
         object_delete = update.call_args_list[0].args[0]
-        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/concept/OTHER> AS ?concept)", object_delete)
+        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/concept/OTHER> AS ?root)", object_delete)
+        self.assertIn("SELECT DISTINCT ?target", object_delete)
+        self.assertIn('?root a schema:DefinedTermSet, vl:Version', object_delete)
+        self.assertIn("PREFIX oa: <https://www.w3.org/ns/oa#>", object_delete)
         self.assertIn("?incoming_subject ?incoming_predicate ?target", object_delete)
         self.assertIn("?incoming_predicate = <http://purl.org/dc/terms/conformsTo>", object_delete)
         self.assertIn('STRSTARTS(STR(?incoming_subject), "https://register.ld.admin.ch/i14y/dataset/")', object_delete)
