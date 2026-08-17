@@ -101,9 +101,12 @@ class VocabularyProtectionTests(unittest.TestCase):
             LindasAPIHelper.delete_concept("OTHER")
 
         object_delete = update.call_args_list[0].args[0]
-        self.assertIn("?p = <http://purl.org/dc/terms/conformsTo>", object_delete)
-        self.assertIn('STRSTARTS(STR(?s), "https://register.ld.admin.ch/i14y/dataset/")', object_delete)
-        self.assertIn('CONTAINS(STR(?s), "/structure/")', object_delete)
+        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/concept/OTHER> AS ?concept)", object_delete)
+        self.assertIn("?incoming_subject ?incoming_predicate ?target", object_delete)
+        self.assertIn("?incoming_predicate = <http://purl.org/dc/terms/conformsTo>", object_delete)
+        self.assertIn('STRSTARTS(STR(?incoming_subject), "https://register.ld.admin.ch/i14y/dataset/")', object_delete)
+        self.assertIn('CONTAINS(STR(?incoming_subject), "/structure/")', object_delete)
+        self.assertNotIn('STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/concept/OTHER")', object_delete)
 
 
 if __name__ == "__main__":

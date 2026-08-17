@@ -475,40 +475,58 @@ WHERE {{
                 f'(STR({node_variable}) = "{concept_base}" || STRSTARTS(STR({node_variable}), "{concept_base}/"))'
             )
 
-        def build_delete_query(filter_expression):
-            return f"""
-DELETE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-    }}
-}}
-WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-        FILTER ({filter_expression})
-    }}
-}}
-"""
-
-        # Remove incoming links to this concept first. Dataset structure
-        # conformsTo links intentionally remain until their dataset is deleted.
-        structure_conforms_to = (
-            '?p = <http://purl.org/dc/terms/conformsTo> && '
-            'isIRI(?s) && '
-            f'STRSTARTS(STR(?s), "{DATASET_URI_BASE}") && '
-            'CONTAINS(STR(?s), "/structure/")'
-        )
-        object_filter = f'{concept_iri_filter("?o")} && !({structure_conforms_to})'
-        print(f"DEBUG: delete_concept side=object concept={concept_identifier}")
-        LindasAPIHelper.graphdb_update(build_delete_query(object_filter))
-
-        # Traverse only the local concept closure rather than scanning every
-        # graph subject. All generated concept resources are skolem IRIs below
-        # concept_base. Shared/external resources deliberately end a path.
+        # All generated concept resources are skolem IRIs below concept_base.
+        # Shared/external resources deliberately end a path.
         local_path = """!(rdf:type|dct:publisher|dct:relation|dct:isReferencedBy|
           dct:conformsTo|owl:imports|owl:sameAs|skos:exactMatch|
           skos:closeMatch|skos:relatedMatch|schema:sameAs|schema:url|
           foaf:page|oa:hasTarget|sh:class|sh:datatype|sh:path)*"""
+
+        # Resolve the owned local closure before joining on its objects. This
+        # replaces the former full-graph STRSTARTS(?object) scan. Dataset
+        # structure conformsTo links intentionally remain until their dataset
+        # is deleted.
+        structure_conforms_to = (
+            '?incoming_predicate = <http://purl.org/dc/terms/conformsTo> && '
+            'isIRI(?incoming_subject) && '
+            f'STRSTARTS(STR(?incoming_subject), "{DATASET_URI_BASE}") && '
+            'CONTAINS(STR(?incoming_subject), "/structure/")'
+        )
+        delete_incoming = f"""
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX oa: <http://www.w3.org/ns/oa#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX schema: <http://schema.org/>
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+DELETE {{
+  GRAPH <{TARGET_GRAPH}> {{
+    ?incoming_subject ?incoming_predicate ?target .
+  }}
+}}
+WHERE {{
+  GRAPH <{TARGET_GRAPH}> {{
+    BIND(<{concept_base}> AS ?concept)
+    {{
+      BIND(?concept AS ?target)
+    }}
+    UNION
+    {{
+      ?concept ?root_predicate ?start .
+      FILTER(isIRI(?start) && STRSTARTS(STR(?start), STR(?concept)))
+      ?start {local_path} ?target .
+      FILTER(isIRI(?target) && STRSTARTS(STR(?target), STR(?concept)))
+    }}
+    ?incoming_subject ?incoming_predicate ?target .
+    FILTER(!({structure_conforms_to}))
+  }}
+}}
+"""
+        print(f"DEBUG: delete_concept side=object concept={concept_identifier}")
+        LindasAPIHelper.graphdb_update(delete_incoming)
+
         delete_subjects = f"""
 PREFIX dct: <http://purl.org/dc/terms/>
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
