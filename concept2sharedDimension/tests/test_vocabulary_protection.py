@@ -28,15 +28,22 @@ class VocabularyProtectionTests(unittest.TestCase):
         self.assertFalse(result)
         update.assert_not_called()
 
-    def test_force_delete_bypasses_protected_vocabulary_guard(self) -> None:
-        with patch.object(I14YAPIHelper, "get_protected_vocabulary_versions") as protected, patch.object(
+    def test_forced_delete_uses_the_production_concept_anchored_closure(self) -> None:
+        with patch.object(
+            I14YAPIHelper, "get_protected_vocabulary_versions"
+        ) as protected, patch.object(
             LindasAPIHelper, "get_lindas_concept_versions"
         ) as lindas_versions, patch.object(LindasAPIHelper, "graphdb_update") as update:
-            LindasAPIHelper.delete_concept("DV_DCAT_DATASET_THEME", force=True)
+            LindasAPIHelper.delete_concept("LIFECYCLE_TEST", force=True)
 
         protected.assert_not_called()
         lindas_versions.assert_not_called()
         self.assertEqual(2, update.call_count)
+        query = update.call_args_list[1].args[0]
+        self.assertIn("BIND(<https://register.ld.admin.ch/i14y/concept/LIFECYCLE_TEST> AS ?concept)", query)
+        self.assertIn("?concept ?root_predicate ?start", query)
+        self.assertIn("?start !(rdf:type|dct:publisher", query)
+        self.assertNotIn("?s ?p ?o .\n            FILTER", query)
     def test_unprotected_vocabulary_keeps_existing_delete_behavior(self) -> None:
         with patch.object(I14YAPIHelper, "get_protected_vocabulary_versions", return_value=set()), patch.object(
             LindasAPIHelper,
@@ -82,7 +89,7 @@ class VocabularyProtectionTests(unittest.TestCase):
             LindasAPIHelper.delete_concept("OTHER")
 
         subject_delete = update.call_args_list[1].args[0]
-        self.assertIn("dct:publisher ?publisher", subject_delete)
+        self.assertIn("?concept dct:publisher ?publisher", subject_delete)
         self.assertIn(AGENT_URI_BASE, subject_delete)
         self.assertIn("FILTER NOT EXISTS", subject_delete)
     def test_dataset_structure_conforms_to_link_is_preserved_when_deleting_concept(self) -> None:

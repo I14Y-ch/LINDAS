@@ -447,6 +447,12 @@ WHERE {{
 
     @staticmethod
     def delete_concept(concept_identifier, *, force=False):
+        """Delete a concept and its local skolemized closure.
+
+        force is reserved for the isolated full-lifecycle test: it bypasses
+        only the protected-vocabulary policy after that test has cleared the
+        graph. The SPARQL deletion mechanism is otherwise the production one.
+        """
         if not force:
             protected_versions = I14YAPIHelper.get_protected_vocabulary_versions()
             lindas_versions = LindasAPIHelper.get_lindas_concept_versions().get(concept_identifier, [])
@@ -459,7 +465,8 @@ WHERE {{
                     f"version(s) {', '.join(matched_versions)}"
                 )
                 return False
-        print(f"DEBUG: delete_concept concept {concept_identifier}")
+
+        print(f"DEBUG: delete_concept concept={concept_identifier} force={force}")
         concept_base = f"{BASE_URI}{concept_identifier}"
 
         def concept_iri_filter(node_variable):
@@ -483,49 +490,69 @@ WHERE {{
 }}
 """
 
-        object_filter = concept_iri_filter("?o")
-        # A structure belongs to its dataset. Keep its conformsTo link even
-        # after its target concept disappears; dataset deletion removes it.
+        # Remove incoming links to this concept first. Dataset structure
+        # conformsTo links intentionally remain until their dataset is deleted.
         structure_conforms_to = (
             '?p = <http://purl.org/dc/terms/conformsTo> && '
             'isIRI(?s) && '
             f'STRSTARTS(STR(?s), "{DATASET_URI_BASE}") && '
             'CONTAINS(STR(?s), "/structure/")'
         )
-        object_filter = f'{object_filter} && !({structure_conforms_to})'
+        object_filter = f'{concept_iri_filter("?o")} && !({structure_conforms_to})'
         print(f"DEBUG: delete_concept side=object concept={concept_identifier}")
         LindasAPIHelper.graphdb_update(build_delete_query(object_filter))
 
+        # Traverse only the local concept closure rather than scanning every
+        # graph subject. All generated concept resources are skolem IRIs below
+        # concept_base. Shared/external resources deliberately end a path.
+        local_path = """!(rdf:type|dct:publisher|dct:relation|dct:isReferencedBy|
+          dct:conformsTo|owl:imports|owl:sameAs|skos:exactMatch|
+          skos:closeMatch|skos:relatedMatch|schema:sameAs|schema:url|
+          foaf:page|oa:hasTarget|sh:class|sh:datatype|sh:path)*"""
         delete_subjects = f"""
 PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX oa: <http://www.w3.org/ns/oa#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX schema: <http://schema.org/>
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 DELETE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        ?s ?p ?o .
-    }}
+  GRAPH <{TARGET_GRAPH}> {{
+    ?s ?p ?o .
+  }}
 }}
 WHERE {{
-    GRAPH <{TARGET_GRAPH}> {{
-        {{
-            ?s ?p ?o .
-            FILTER ({concept_iri_filter("?s")})
-        }}
-        UNION
-        {{
-            ?owner dct:publisher ?publisher .
-            FILTER ({concept_iri_filter("?owner")})
-            FILTER(isIRI(?publisher) && STRSTARTS(STR(?publisher), "{AGENT_URI_BASE}"))
-            FILTER NOT EXISTS {{
-                ?other_owner dct:publisher ?publisher .
-                FILTER(!({concept_iri_filter("?other_owner")}))
-            }}
-            ?publisher ?p ?o .
-            BIND(?publisher AS ?s)
-        }}
+  GRAPH <{TARGET_GRAPH}> {{
+    BIND(<{concept_base}> AS ?concept)
+    {{
+      BIND(?concept AS ?s)
     }}
+    UNION
+    {{
+      ?concept ?root_predicate ?start .
+      FILTER(isIRI(?start) && STRSTARTS(STR(?start), STR(?concept)))
+      ?start {local_path} ?s .
+      FILTER(isIRI(?s) && STRSTARTS(STR(?s), STR(?concept)))
+    }}
+    UNION
+    {{
+      ?concept dct:publisher ?publisher .
+      FILTER(isIRI(?publisher) && STRSTARTS(STR(?publisher), "{AGENT_URI_BASE}"))
+      FILTER NOT EXISTS {{
+        ?other_owner dct:publisher ?publisher .
+        FILTER(!({concept_iri_filter("?other_owner")}))
+      }}
+      ?publisher ?p ?o .
+      BIND(?publisher AS ?s)
+    }}
+  }}
 }}
 """
         print(f"DEBUG: delete_concept side=subject concept={concept_identifier}")
         LindasAPIHelper.graphdb_update(delete_subjects)
+
 
 class I14YAPIHelper:
 
