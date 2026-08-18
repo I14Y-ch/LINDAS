@@ -104,9 +104,10 @@ class DatasetRdfMapper:
                 graph.add((subject, predicate, Literal(value, lang=language)))
 
     @staticmethod
-    def _add_datetime(graph: Graph, subject: Any, predicate: URIRef, value: Any) -> None:
-        if value is not None:
-            graph.add((subject, predicate, Literal(value, datatype=XSD.dateTime)))
+    def _add_date(graph: Graph, subject: Any, predicate: URIRef, value: Any) -> None:
+        normalized = DatasetRdfMapper._date_value(value)
+        if normalized:
+            graph.add((subject, predicate, Literal(normalized, datatype=XSD.date)))
 
     def _add_resources(
         self,
@@ -168,7 +169,7 @@ class DatasetRdfMapper:
                 graph.add((node, DCAT.hadRole, self._resource_uri(role)))
 
     @staticmethod
-    def _coverage_date(value: Any) -> str | None:
+    def _date_value(value: Any) -> str | None:
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -216,7 +217,7 @@ class DatasetRdfMapper:
 
         self._add_resources(graph, distribution_node, DCTERMS.conformsTo, self._values(distribution.get("conformsTo")), URIRef(f"{DCTERMS}standard"))
         for coverage in self._values(distribution.get("coverage")):
-            coverage_date = self._coverage_date((coverage or {}).get("start"))
+            coverage_date = self._date_value((coverage or {}).get("start"))
             if coverage_date:
                 graph.add((distribution_node, DCTERMS.coverage, Literal(coverage_date)))
                 break
@@ -241,11 +242,11 @@ class DatasetRdfMapper:
         media_type_uri = (distribution.get("mediaType") or {}).get("uri")
         if media_type_uri is not None:
             graph.add((distribution_node, DCAT.mediaType, self._resource_uri(media_type_uri)))
-        self._add_datetime(graph, distribution_node, DCTERMS.modified, distribution.get("modified"))
+        self._add_date(graph, distribution_node, DCTERMS.modified, distribution.get("modified"))
         packaging_uri = (distribution.get("packagingFormat") or {}).get("uri")
         if packaging_uri is not None:
             graph.add((distribution_node, DCAT.packageFormat, self._resource_uri(packaging_uri)))
-        self._add_datetime(graph, distribution_node, DCTERMS.issued, distribution.get("issued"))
+        self._add_date(graph, distribution_node, DCTERMS.issued, distribution.get("issued"))
         if self._non_empty(distribution.get("temporalResolution")):
             graph.add((distribution_node, DCAT.temporalResolution, Literal(distribution["temporalResolution"])))
         self._add_multilingual(graph, distribution_node, DCTERMS.title, distribution.get("title"))
@@ -282,7 +283,7 @@ class DatasetRdfMapper:
         self._add_resources(graph, uri, SCHEMA.image, self._values(dataset.get("images")), SCHEMA.url)
         self._add_resources(graph, uri, DCTERMS.isReferencedBy, self._values(dataset.get("isReferencedBy")), RDFS.Resource)
         self._add_resources(graph, uri, DCTERMS.relation, self._values(dataset.get("relations")), RDFS.Resource)
-        self._add_datetime(graph, uri, DCTERMS.issued, dataset.get("issued"))
+        self._add_date(graph, uri, DCTERMS.issued, dataset.get("issued"))
         for keyword in self._values(dataset.get("keywords")):
             self._add_multilingual(graph, uri, DCAT.keyword, (keyword or {}).get("label"))
         landing_pages = list(self._values(dataset.get("landingPages")))
@@ -292,7 +293,7 @@ class DatasetRdfMapper:
             code = (language or {}).get("code")
             if self._non_empty(code):
                 graph.add((uri, DCTERMS.language, Literal(code)))
-        self._add_datetime(graph, uri, DCTERMS.modified, dataset.get("modified"))
+        self._add_date(graph, uri, DCTERMS.modified, dataset.get("modified"))
 
         publisher = dataset.get("publisher") or {}
         if publisher:
@@ -316,8 +317,8 @@ class DatasetRdfMapper:
             period = self._new_bnode("period", temporal_coverage[0])
             graph.add((uri, DCTERMS.temporal, period))
             graph.add((period, RDF.type, DCTERMS.PeriodOfTime))
-            self._add_datetime(graph, period, SCHEMA.startDate, temporal_coverage[0].get("start"))
-            self._add_datetime(graph, period, SCHEMA.endDate, temporal_coverage[0].get("end"))
+            self._add_date(graph, period, SCHEMA.startDate, temporal_coverage[0].get("start"))
+            self._add_date(graph, period, SCHEMA.endDate, temporal_coverage[0].get("end"))
         self._add_multilingual(graph, uri, DCTERMS.title, dataset.get("title"))
         for theme in self._values(dataset.get("themes")):
             theme_uri = (theme or {}).get("uri")

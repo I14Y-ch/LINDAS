@@ -8,7 +8,7 @@ from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import DCTERMS, RDF, XSD
 
 from dataset2lindas.src.config import DatasetConfig
-from dataset2lindas.src.mapper import DCAT, DCATAP, FOAF, ORG, INVALID_URI, SH, SPDX, VCARD, DatasetRdfMapper
+from dataset2lindas.src.mapper import DCAT, DCATAP, FOAF, ORG, INVALID_URI, SCHEMA, SH, SPDX, VCARD, DatasetRdfMapper
 
 
 def make_config() -> DatasetConfig:
@@ -40,6 +40,7 @@ def dataset() -> dict:
         "contactPoints": [{"fn": {"fr": "Contact"}, "hasEmail": "contact@example.org"}],
         "description": {"fr": "Description"},
         "issued": "2025-01-02T00:00:00+00:00",
+        "modified": "2025-01-03T00:00:00+00:00",
         "keywords": [{"label": {"fr": "mot-clé"}}],
         "languages": [{"code": "fr"}],
         "publisher": {"identifier": "CH1", "name": {"fr": "OFS"}},
@@ -53,6 +54,8 @@ def dataset() -> dict:
             "checksum": {"algorithm": {"uri": "https://example.org/sha256"}, "checksumValue": "abc"},
             "coverage": [{"start": "2024-01-01T00:00:00+00:00"}],
             "identifier": "dist-1",
+            "issued": "2025-01-04T00:00:00+00:00",
+            "modified": "2025-01-05T00:00:00+00:00",
             "title": {"fr": "CSV"},
             "accessServices": [{"id": "public-service"}, {"id": "private-service"}],
         }],
@@ -84,6 +87,17 @@ class DatasetRdfMapperTests(unittest.TestCase):
         self.assertIn((publisher, RDF.type, ORG.Organization), self.graph)
         self.assertIn((publisher, RDF.type, FOAF.Organization), self.graph)
         self.assertIn((publisher, FOAF.name, Literal("OFS", lang="fr")), self.graph)
+
+    def test_uses_xsd_date_for_dataset_dates(self) -> None:
+        distribution = next(self.graph.objects(self.uri, DCAT.distribution))
+        period = next(self.graph.objects(self.uri, DCTERMS.temporal))
+
+        self.assertIn((self.uri, DCTERMS.issued, Literal("2025-01-02", datatype=XSD.date)), self.graph)
+        self.assertIn((self.uri, DCTERMS.modified, Literal("2025-01-03", datatype=XSD.date)), self.graph)
+        self.assertIn((distribution, DCTERMS.issued, Literal("2025-01-04", datatype=XSD.date)), self.graph)
+        self.assertIn((distribution, DCTERMS.modified, Literal("2025-01-05", datatype=XSD.date)), self.graph)
+        self.assertIn((period, SCHEMA.startDate, Literal("2024-01-01", datatype=XSD.date)), self.graph)
+        self.assertIn((period, SCHEMA.endDate, Literal("2024-12-31", datatype=XSD.date)), self.graph)
 
     def test_uses_blank_nodes_and_never_uses_version_link(self) -> None:
         contact = next(self.graph.objects(self.uri, DCAT.contactPoint))
