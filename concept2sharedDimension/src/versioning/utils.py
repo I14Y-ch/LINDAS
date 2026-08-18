@@ -510,6 +510,9 @@ WHERE {{
             f'STRSTARTS(STR(?incoming_subject), "{DATASET_URI_BASE}") && '
             'CONTAINS(STR(?incoming_subject), "/structure/")'
         )
+        # The subject-deletion pass needs local hierarchy links to remain
+        # available until it has traversed the complete concept closure.
+        incoming_local_subject = concept_iri_filter("?incoming_subject")
         delete_incoming = f"""
 PREFIX cube: <https://cube.link/meta/>
 PREFIX dct: <http://purl.org/dc/terms/>
@@ -538,7 +541,7 @@ WHERE {{
   }}
   GRAPH <{TARGET_GRAPH}> {{
     ?incoming_subject ?incoming_predicate ?target .
-    FILTER(!({structure_conforms_to}))
+    FILTER(!({structure_conforms_to}) && !({incoming_local_subject}))
   }}
 }}
 """

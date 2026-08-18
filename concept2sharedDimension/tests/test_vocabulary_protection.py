@@ -5,11 +5,11 @@ from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import ConjunctiveGraph, Graph, Literal, Namespace, URIRef
 ORG = Namespace("http://www.w3.org/ns/org#")
 from rdflib.namespace import DCTERMS, RDF, FOAF
 
-from concept2sharedDimension.src.versioning.config import AGENT_URI_BASE, BASE_URI
+from concept2sharedDimension.src.versioning.config import AGENT_URI_BASE, BASE_URI, TARGET_GRAPH
 from concept2sharedDimension.src.versioning.core import ConceptMetadataManager, GraphManager
 
 from concept2sharedDimension.src.versioning.utils import I14YAPIHelper, LindasAPIHelper
@@ -112,6 +112,32 @@ class VocabularyProtectionTests(unittest.TestCase):
         self.assertIn('CONTAINS(STR(?incoming_subject), "/structure/")', object_delete)
         self.assertNotIn('STRSTARTS(STR(?o), "https://register.ld.admin.ch/i14y/concept/OTHER")', object_delete)
 
+
+    def test_concept_deletion_removes_the_complete_local_hierarchy(self) -> None:
+        schema = Namespace("http://schema.org/")
+        version_link = Namespace("https://version.link/")
+        dataset = ConjunctiveGraph()
+        graph = dataset.get_context(URIRef(TARGET_GRAPH))
+
+        root = URIRef(f"{BASE_URI}REGRESSION")
+        level = URIRef(f"{BASE_URI}REGRESSION/all")
+        entry = URIRef(f"{BASE_URI}REGRESSION/1")
+        catalog = URIRef("https://register.ld.admin.ch/i14y/.well-known/void")
+        graph.add((root, RDF.type, schema.DefinedTermSet))
+        graph.add((root, RDF.type, version_link.Version))
+        graph.add((root, schema.identifier, Literal("REGRESSION")))
+        graph.add((root, schema.hasPart, level))
+        graph.add((level, schema.member, entry))
+        graph.add((entry, RDF.type, schema.DefinedTerm))
+        graph.add((catalog, schema.dataset, root))
+
+        with patch.object(LindasAPIHelper, "graphdb_update") as update:
+            LindasAPIHelper.delete_concept("REGRESSION", force=True)
+
+        for call in update.call_args_list:
+            dataset.update(call.args[0])
+
+        self.assertEqual(0, len(graph))
 
 if __name__ == "__main__":
     unittest.main()
