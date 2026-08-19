@@ -13,6 +13,7 @@ jobs:
   import-all-datasets:
     uses: ./.github/workflows/dataset_reusable_workflow.yml
     with:
+      RUNNER: ubuntu-26.04
       CLEAR_GRAPH: true
       CREATE_DATASET_CATALOG: false
       LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas/statements"
@@ -23,7 +24,7 @@ jobs:
 
   count-delete-and-verify-empty:
     needs: import-all-datasets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       PYTHON_VERSION: "3.10"
       TARGET_GRAPH: "https://lindas.admin.ch/fso/i14y"

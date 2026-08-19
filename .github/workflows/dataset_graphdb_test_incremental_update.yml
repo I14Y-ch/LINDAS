@@ -24,6 +24,7 @@ jobs:
   update-datasets:
     uses: ./.github/workflows/dataset_reusable_workflow.yml
     with:
+      RUNNER: ubuntu-26.04
       CLEAR_GRAPH: ${{ inputs.CLEAR_GRAPH || false }}
       CREATE_DATASET_CATALOG: ${{ inputs.CREATE_DATASET_CATALOG || false }}
       LINDAS_UPDATE_URL: "https://test.graphdb.lindas.admin.ch/repositories/lindas/statements"

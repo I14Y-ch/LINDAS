@@ -3,6 +3,10 @@ name: Dataset2Lindas Update (reusable workflow)
 on:
   workflow_call:
     inputs:
+      RUNNER:
+        required: false
+        type: string
+        default: ubuntu-latest
       CLEAR_GRAPH:
         required: true
         type: boolean
@@ -45,7 +49,7 @@ env:
 
 jobs:
   get-datasets:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     outputs:
       total_to_process: ${{ steps.plan.outputs.total_to_process }}
       source_count: ${{ steps.plan.outputs.source_count }}
@@ -111,7 +115,7 @@ jobs:
   process-batches:
     needs: get-datasets
     if: ${{ needs.get-datasets.outputs.total_to_process != '0' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     strategy:
       fail-fast: true
       max-parallel: 5
@@ -160,7 +164,7 @@ jobs:
   reconcile-and-upload:
     needs: [get-datasets, process-batches]
     if: ${{ always() && needs.get-datasets.result == 'success' && (needs.process-batches.result == 'success' || needs.process-batches.result == 'skipped') && needs.get-datasets.outputs.should_finalize == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -257,7 +261,7 @@ jobs:
   verify-source-metrics:
     needs: [get-datasets, reconcile-and-upload]
     if: ${{ always() && needs.get-datasets.result == 'success' && (needs.reconcile-and-upload.result == 'success' || needs.reconcile-and-upload.result == 'skipped') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     env:
       SOURCE_DATASET_COUNT: ${{ needs.get-datasets.outputs.source_count }}
       SOURCE_STRUCTURE_COUNT: ${{ needs.get-datasets.outputs.source_structure_count }}
@@ -331,7 +335,7 @@ jobs:
   final-summary:
     needs: [get-datasets, process-batches, reconcile-and-upload, verify-source-metrics]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     steps:
       - name: Summary
         run: |

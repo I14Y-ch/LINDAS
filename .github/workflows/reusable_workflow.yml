@@ -3,6 +3,10 @@ name: Concept2Lindas Update (reusable workflow)
 on:
   workflow_call:
     inputs:
+      RUNNER:
+        required: false
+        type: string
+        default: ubuntu-latest
       CLEAR_GRAPH:
         required: true
         type: boolean
@@ -40,7 +44,7 @@ env:
 
 jobs:
   get-concepts:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     outputs:
       concept_ids: ${{ steps.get-concepts.outputs.concept_ids }}
       total_concepts: ${{ steps.get-concepts.outputs.total_concepts }}
@@ -116,7 +120,7 @@ jobs:
   process-batches:
     needs: get-concepts
     if: ${{ needs.get-concepts.outputs.total_concepts != '0' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     strategy:
       fail-fast: true
       max-parallel: 3
@@ -190,7 +194,7 @@ jobs:
 
   detect-ttl-output:
     needs: process-batches
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     outputs:
       has_ttl: ${{ steps.detect.outputs.has_ttl }}
 
@@ -223,7 +227,7 @@ jobs:
   clear-and-upload:
     needs: [get-concepts, process-batches, detect-ttl-output]
     if: ${{ needs.get-concepts.outputs.total_concepts != '0' && needs.detect-ttl-output.outputs.has_ttl == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -330,7 +334,7 @@ jobs:
   verify-source-metrics:
     needs: [get-concepts, clear-and-upload]
     if: ${{ always() && needs.get-concepts.result == 'success' && (needs.clear-and-upload.result == 'success' || needs.clear-and-upload.result == 'skipped') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     env:
       SOURCE_STATUS_COUNTS: ${{ needs.get-concepts.outputs.source_status_counts }}
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
@@ -397,7 +401,7 @@ jobs:
           PY
   final-summary:
     needs: [get-concepts, process-batches, clear-and-upload, verify-source-metrics]
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.RUNNER }}
     if: always()
     steps:
       - name: Summary
