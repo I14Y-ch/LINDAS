@@ -608,6 +608,9 @@ class I14YAPIHelper:
     # Same idea, but here we have a concept identifier -> concept list map, useful when a concept identifier has multiple versions
     local_identifier_concepts_map = {}
 
+    # Status counts from the exact CodeList version inventory selected for export.
+    source_concept_status_counts = {}
+
     # Pairs from the core vocabulary configuration endpoint. None means not loaded yet.
     protected_vocabulary_versions = None
 
@@ -695,19 +698,19 @@ class I14YAPIHelper:
 
     @staticmethod
     def get_all_concepts(registration_statuses=None, pageSize=50):
-        """Get all CodeList concepts with specified registration statuses"""
+        """Get public CodeList concepts with the selected registration statuses.
+
+        Every matching CodeList version is exportable, even if another version
+        of the same identifier has a different concept type.
+        """
         if not I14YAPIHelper.local_id_concepts_map:
-
             print("DEBUG: get_all_concepts API call")
-
-            base_url = f"{BASE_API_URL}"
-            all_concepts = []
-            printed_count = 0
-            failed_concepts = []
 
             if registration_statuses is None:
                 registration_statuses = STATUSES
 
+            base_url = f"{BASE_API_URL}"
+            all_public_concepts = []
             page = 1
             while True:
                 params = {"publicationLevel": "Public", "page": page, "pageSize": pageSize}
@@ -718,74 +721,93 @@ class I14YAPIHelper:
                             base_url,
                             params=params,
                             verify=False if DEBUG_LOCAL_TEST else True,
-                            headers={
-                                "User-Agent": I14Y_USER_AGENT,
-                            },
+                            headers={"User-Agent": I14Y_USER_AGENT},
                         )
                         response.raise_for_status()
                         break
-                    except Exception as e:
+                    except Exception:
                         if attempt == retries:
                             raise
                         sleep(random.uniform(1, 2))
 
                 data = response.json().get("data", [])
-
                 if not data:
                     break
 
-                filtered = []
-                for c in data:
-                    if c.get("conceptType") != "CodeList":
-                        continue
-
-                    if c.get("registrationStatus") not in registration_statuses:
-                        continue
-
-                    if c.get("id") in EXCLUDED_IDS:
-                        continue
-
-                    identifier = c.get("identifiers")[0]
-                    version = c.get("version")
-
-                    filtered.append(c)
-
-                for i, concept in enumerate(filtered, printed_count + 1):
-                    print(f"{i}. Identifier: {concept.get('identifiers')[0]}")
-                    print(f"   Title: {concept.get('name')}")
-                    print(f"   Status: {concept.get('registrationStatus')}")
-                    print(f"   Version: {concept.get('version')}\n")
-
-                all_concepts.extend(filtered)
-                printed_count = len(all_concepts)
-
+                all_public_concepts.extend(data)
                 if len(data) < pageSize:
                     break
-
                 page += 1
 
-            # Give warning if any concepts failed during processing
-            if failed_concepts:
-                print(
-                    f"Warning: {len(failed_concepts)} concept(s) could not be retrieved during processing: {', '.join(failed_concepts)}"
-                )
-
-            # We get only the latest concept version from i14y because we will get all the versions for each concept afterwards anyway
+            # Every public CodeList version matching the requested status is
+            # exportable.  Non-CodeList versions of the same identifier never
+            # enter the cache or the RDF output.
             latest_concepts = {}
-            for concept in all_concepts:
-                identifier = concept["identifiers"][0]
-                valid_from = concept["validFrom"]
-
-                if identifier not in latest_concepts or valid_from > latest_concepts[identifier]["validFrom"]:
+            for concept in all_public_concepts:
+                identifiers = concept.get("identifiers") or []
+                if not identifiers:
+                    continue
+                identifier = identifiers[0]
+                if (
+                    concept.get("conceptType") != "CodeList"
+                    or concept.get("registrationStatus") not in registration_statuses
+                    or concept.get("id") in EXCLUDED_IDS
+                ):
+                    continue
+                current_latest = latest_concepts.get(identifier)
+                if current_latest is None or (concept.get("validFrom") or "") > (current_latest.get("validFrom") or ""):
                     latest_concepts[identifier] = concept
 
-            for concept in all_concepts:
-                concept_identifier = concept["identifiers"][0]
-                if concept["id"] == latest_concepts[concept_identifier]["id"]:
-                    # local_id_concepts_map is used to store only the latest version of a concept, by id
-                    I14YAPIHelper.local_id_concepts_map[concept["id"]] = concept
+            selected_identifiers = set(latest_concepts)
+
+            # Cache exactly the historical CodeList versions that this exporter
+            # may emit. Never include a String/Numeric/etc. version.
+            I14YAPIHelper.local_identifier_concepts_map = {}
+            for concept in all_public_concepts:
+                identifiers = concept.get("identifiers") or []
+                if not identifiers:
+                    continue
+                identifier = identifiers[0]
+                if (
+                    identifier in selected_identifiers
+                    and concept.get("conceptType") == "CodeList"
+                    and concept.get("registrationStatus") in registration_statuses
+                ):
+                    I14YAPIHelper.local_identifier_concepts_map.setdefault(identifier, []).append(concept)
+
+            I14YAPIHelper.source_concept_status_counts = {
+                status: sum(
+                    1
+                    for versions in I14YAPIHelper.local_identifier_concepts_map.values()
+                    for concept in versions
+                    if concept.get("registrationStatus") == status
+                )
+                for status in registration_statuses
+            }
+
+            for index, concept in enumerate(latest_concepts.values(), 1):
+                print(f"{index}. Identifier: {concept.get('identifiers')[0]}")
+                print(f"   Title: {concept.get('name')}")
+                print(f"   Status: {concept.get('registrationStatus')}")
+                print(f"   Version: {concept.get('version')}\n")
+                I14YAPIHelper.local_id_concepts_map[concept["id"]] = concept
 
         return list(I14YAPIHelper.local_id_concepts_map.values())
+
+    @staticmethod
+    def get_exported_concept_status_counts(registration_statuses=None):
+        """Return status counts from the exact source inventory selected for export."""
+        statuses = registration_statuses if registration_statuses is not None else STATUSES
+        return {status: I14YAPIHelper.source_concept_status_counts.get(status, 0) for status in statuses}
+
+    @staticmethod
+    def get_exported_concept_versions(concept_identifier):
+        """Return the CodeList versions retained by the current source scan."""
+        return {
+            str(concept["version"])
+            for concept in I14YAPIHelper.local_identifier_concepts_map.get(concept_identifier, [])
+            if concept.get("version") is not None
+        }
 
     @staticmethod
     def get_concept_batches():
@@ -970,7 +992,11 @@ class I14YAPIHelper:
                 print(f"Error fetching versions for {concept_identifier}: {str(e)}")
                 raise
 
-        concepts = I14YAPIHelper.local_identifier_concepts_map[concept_identifier]
+        concepts = [
+            concept
+            for concept in I14YAPIHelper.local_identifier_concepts_map[concept_identifier]
+            if concept.get("conceptType") == "CodeList" and concept.get("registrationStatus") in STATUSES
+        ]
         versions = []
         for concept in concepts:
             versions.append(

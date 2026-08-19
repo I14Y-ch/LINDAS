@@ -81,14 +81,11 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
-          from concurrent.futures import ThreadPoolExecutor
           from concept2sharedDimension.src.versioning.utils import I14YAPIHelper
           from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
           print("Using status-based filtering")
-          with ThreadPoolExecutor(max_workers=1) as executor:
-              status_counts_future = executor.submit(I14YAPIHelper.get_concept_status_counts, STATUSES)
-              concepts = I14YAPIHelper.get_all_concepts()
-              source_status_counts = status_counts_future.result()
+          concepts = I14YAPIHelper.get_all_concepts()
+          source_status_counts = I14YAPIHelper.get_exported_concept_status_counts(STATUSES)
           ids = [c["id"] for c in concepts]
           print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
           print(f"Source concept versions by status: {source_status_counts}")

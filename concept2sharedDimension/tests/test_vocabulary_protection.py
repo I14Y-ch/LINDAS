@@ -11,6 +11,7 @@ from rdflib.namespace import DCTERMS, RDF, FOAF
 
 from concept2sharedDimension.src.versioning.config import AGENT_URI_BASE, BASE_URI, TARGET_GRAPH
 from concept2sharedDimension.src.versioning.core import ConceptMetadataManager, GraphManager
+from concept2sharedDimension.src.versioning.processor import VersionProcessor
 
 from concept2sharedDimension.src.versioning.utils import I14YAPIHelper, LindasAPIHelper
 
@@ -138,6 +139,109 @@ class VocabularyProtectionTests(unittest.TestCase):
             dataset.update(call.args[0])
 
         self.assertEqual(0, len(graph))
+
+    def test_all_codelist_versions_are_exported(self) -> None:
+        class ConceptsResponse:
+            def __init__(self, data):
+                self._data = data
+
+            def json(self):
+                return {"data": self._data}
+
+            def raise_for_status(self) -> None:
+                return None
+
+        rows = [
+            {
+                "id": "current-codelist",
+                "identifiers": ["CURRENT_CODELIST"],
+                "validFrom": "2026-01-01",
+                "version": "2.0.0",
+                "conceptType": "CodeList",
+                "registrationStatus": "Recorded",
+            },
+            {
+                "id": "old-string",
+                "identifiers": ["CURRENT_CODELIST"],
+                "validFrom": "2025-01-01",
+                "version": "1.0.0",
+                "conceptType": "String",
+                "registrationStatus": "Recorded",
+            },
+            {
+                "id": "current-string",
+                "identifiers": ["CURRENT_STRING"],
+                "validFrom": "2026-01-01",
+                "version": "2.0.0",
+                "conceptType": "String",
+                "registrationStatus": "Recorded",
+            },
+            {
+                "id": "old-codelist",
+                "identifiers": ["CURRENT_STRING"],
+                "validFrom": "2025-01-01",
+                "version": "1.0.0",
+                "conceptType": "CodeList",
+                "registrationStatus": "Recorded",
+            },
+        ]
+        saved_ids = I14YAPIHelper.local_id_concepts_map
+        saved_versions = I14YAPIHelper.local_identifier_concepts_map
+        saved_counts = I14YAPIHelper.source_concept_status_counts
+        try:
+            I14YAPIHelper.local_id_concepts_map = {}
+            I14YAPIHelper.local_identifier_concepts_map = {}
+            I14YAPIHelper.source_concept_status_counts = {}
+            with patch(
+                "concept2sharedDimension.src.versioning.utils.r.get",
+                return_value=ConceptsResponse(rows),
+            ):
+                selected = I14YAPIHelper.get_all_concepts(["Recorded"])
+
+            self.assertEqual(
+                ["CURRENT_CODELIST", "CURRENT_STRING"],
+                [item["identifiers"][0] for item in selected],
+            )
+            self.assertEqual({"Recorded": 2}, I14YAPIHelper.get_exported_concept_status_counts(["Recorded"]))
+            self.assertEqual({"2.0.0"}, I14YAPIHelper.get_exported_concept_versions("CURRENT_CODELIST"))
+            self.assertEqual({"1.0.0"}, I14YAPIHelper.get_exported_concept_versions("CURRENT_STRING"))
+        finally:
+            I14YAPIHelper.local_id_concepts_map = saved_ids
+            I14YAPIHelper.local_identifier_concepts_map = saved_versions
+            I14YAPIHelper.source_concept_status_counts = saved_counts
+
+    def test_version_set_difference_bypasses_modified_at_cutoff(self) -> None:
+        concept = {
+            "id": "current-codelist",
+            "identifiers": ["CURRENT_CODELIST"],
+            "validFrom": "2026-01-01",
+            "version": "2.0.0",
+            "conceptType": "CodeList",
+            "registrationStatus": "Recorded",
+            "codeListEntries": [{"code": "A"}],
+            "system": {"modifiedAt": "2020-01-01T00:00:00+00:00"},
+        }
+        saved_ids = I14YAPIHelper.local_id_concepts_map
+        saved_versions = I14YAPIHelper.local_identifier_concepts_map
+        try:
+            I14YAPIHelper.local_id_concepts_map = {concept["id"]: concept}
+            I14YAPIHelper.local_identifier_concepts_map = {"CURRENT_CODELIST": [concept]}
+            with TemporaryDirectory() as directory, patch.object(
+                LindasAPIHelper,
+                "get_lindas_concept_versions",
+                return_value={"CURRENT_CODELIST": ["1.0.0", "2.0.0"]},
+            ), patch.object(LindasAPIHelper, "delete_concept") as delete_concept, patch.object(
+                VersionProcessor, "process_new_concept"
+            ) as process_new_concept:
+                processor = VersionProcessor(BASE_URI, Path(directory) / "concept.ttl")
+                processor.process_all_concepts(concept_ids=[concept["id"]], clear_graph=False)
+                processor.vm.close()
+
+            delete_concept.assert_called_once_with("CURRENT_CODELIST")
+            process_new_concept.assert_called_once_with(concept["id"])
+        finally:
+            I14YAPIHelper.local_id_concepts_map = saved_ids
+            I14YAPIHelper.local_identifier_concepts_map = saved_versions
 
     def test_concept_status_counts_use_i14y_search_headers(self) -> None:
         class SearchResponse:

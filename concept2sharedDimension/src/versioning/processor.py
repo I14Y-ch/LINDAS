@@ -136,6 +136,17 @@ class VersionProcessor:
                     concepts_to_process.append(concept_id)
                     continue
 
+                source_versions = I14YAPIHelper.get_exported_concept_versions(identifier)
+                lindas_versions = set(lindas_concept_versions.get(identifier, []))
+                if source_versions and source_versions != lindas_versions:
+                    print(
+                        f"DEBUG: concept {identifier} has different CodeList versions "
+                        "on i14y and LINDAS, will be deleted and reimported"
+                    )
+                    concepts_to_delete_identifiers.add(identifier)
+                    concepts_to_process.append(concept_id)
+                    continue
+
                 try:
                     modified_at = self._parse_i14y_modified_at(concept)
                 except ValueError as e:
