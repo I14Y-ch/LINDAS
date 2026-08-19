@@ -158,6 +158,7 @@ class VocabularyProtectionTests(unittest.TestCase):
             {
                 "registrationStatuses": "Standard",
                 "types": "Concept",
+                "conceptValueTypes": "CodeList",
                 "page": 1,
                 "pageSize": 25,
             },

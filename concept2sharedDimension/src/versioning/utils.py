@@ -663,6 +663,7 @@ class I14YAPIHelper:
                         params={
                             "registrationStatuses": status,
                             "types": "Concept",
+                            "conceptValueTypes": "CodeList",
                             "page": 1,
                             "pageSize": 25,
                         },
