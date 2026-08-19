@@ -102,7 +102,8 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
               print(f"concept_ids={','.join(ids)}", file=gh)
               print(f"total_concepts={len(ids)}", file=gh)
-              print(f"source_status_counts={json.dumps(source_status_counts, sort_keys=True, separators=(\",\", \":\"))}", file=gh)
+              source_status_counts_json = json.dumps(source_status_counts, sort_keys=True, separators=(",", ":"))
+              print(f"source_status_counts={source_status_counts_json}", file=gh)
               print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
       - name: Delete concepts on LINDAS that are not on I14Y
