@@ -44,6 +44,7 @@ jobs:
     outputs:
       concept_ids: ${{ steps.get-concepts.outputs.concept_ids }}
       total_concepts: ${{ steps.get-concepts.outputs.total_concepts }}
+      source_status_counts: ${{ steps.get-concepts.outputs.source_status_counts }}
       batch_matrix: ${{ steps.get-concepts.outputs.batch_matrix }}
       output_file: ${{ steps.get-output-filename.outputs.filename }}
 
@@ -76,12 +77,17 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
+          from concurrent.futures import ThreadPoolExecutor
           from concept2sharedDimension.src.versioning.utils import I14YAPIHelper
           from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
           print("Using status-based filtering")
-          concepts = I14YAPIHelper.get_all_concepts()
+          with ThreadPoolExecutor(max_workers=1) as executor:
+              status_counts_future = executor.submit(I14YAPIHelper.get_concept_status_counts, STATUSES)
+              concepts = I14YAPIHelper.get_all_concepts()
+              source_status_counts = status_counts_future.result()
           ids = [c["id"] for c in concepts]
           print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
+          print(f"Source concept versions by status: {source_status_counts}")
 
           batches = I14YAPIHelper.get_concept_batches()
           n_batches = len(batches)
@@ -92,6 +98,7 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
               print(f"concept_ids={','.join(ids)}", file=gh)
               print(f"total_concepts={len(ids)}", file=gh)
+              print(f"source_status_counts={json.dumps(source_status_counts, sort_keys=True, separators=(\",\", \":\"))}", file=gh)
               print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
       - name: Delete concepts on LINDAS that are not on I14Y
@@ -320,8 +327,76 @@ jobs:
         run: |
           rm -rf batches/*
           echo "All batch files removed after upload"
+  verify-source-metrics:
+    needs: [get-concepts, clear-and-upload]
+    if: ${{ always() && needs.get-concepts.result == 'success' && (needs.clear-and-upload.result == 'success' || needs.clear-and-upload.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_STATUS_COUNTS: ${{ needs.get-concepts.outputs.source_status_counts }}
+      STARDOG_USER: ${{ secrets.STARDOG_USER }}
+      STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compare imported concept versions by registration status
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          from concept2sharedDimension.src.versioning.config import TARGET_GRAPH
+          from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
+
+          source_counts = json.loads(os.environ["SOURCE_STATUS_COUNTS"])
+          if not source_counts:
+              raise RuntimeError("No source concept status metrics were recorded")
+
+          values = " ".join(json.dumps(status) for status in sorted(source_counts))
+          query = f'''\
+          PREFIX adms: <http://www.w3.org/ns/adms#>
+          PREFIX schema: <http://schema.org/>
+          PREFIX vl: <https://version.link/>
+          SELECT ?status (COUNT(DISTINCT ?concept_version) AS ?count)
+          WHERE {{
+            GRAPH <{TARGET_GRAPH}> {{
+              VALUES ?status {{ {values} }}
+              ?concept_version a schema:DefinedTermSet, vl:Version ;
+                               adms:status ?status .
+            }}
+          }}
+          GROUP BY ?status
+          ORDER BY ?status
+          '''
+          target_counts = {status: 0 for status in source_counts}
+          for row in LindasAPIHelper.lindas_query(query):
+              status = row["status"]["value"]
+              target_counts[status] = int(row["count"]["value"])
+
+          summary = [
+              "## Concept source/LINDAS metrics",
+              "",
+              "| Registration status | i14y versions | LINDAS versions |",
+              "| --- | ---: | ---: |",
+          ]
+          summary.extend(
+              f"| {status} | {source_counts[status]} | {target_counts.get(status, 0)} |"
+              for status in sorted(source_counts)
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+
+          print(f"i14y concept versions by status: {source_counts}")
+          print(f"LINDAS concept versions by status: {target_counts}")
+          if target_counts != source_counts:
+              raise RuntimeError("Concept source/LINDAS status metrics do not match")
+          PY
   final-summary:
-    needs: [get-concepts, process-batches, clear-and-upload]
+    needs: [get-concepts, process-batches, clear-and-upload, verify-source-metrics]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -329,5 +404,6 @@ jobs:
         run: |
           echo "Processing Summary:"
           echo "Total concepts: ${{ needs.get-concepts.outputs.total_concepts }}"
+          echo "Source concept versions by status: ${{ needs.get-concepts.outputs.source_status_counts }}"
           echo "All batches have been processed and uploaded to LINDAS"
           echo "Target graph: ${{ env.TARGET_GRAPH }}"

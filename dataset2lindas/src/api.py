@@ -73,6 +73,42 @@ class I14YDatasetsAPI:
             page += 1
         return datasets
 
+    def get_structured_dataset_count(self) -> int:
+        """Return the i14y inventory count for datasets that have a structure."""
+        search_url = f"{self.config.datasets_api_url.rsplit('/', 1)[0]}/search"
+        headers = {"User-Agent": self.config.user_agent, "Accept": "application/json"}
+        params = {
+            "structure": "WithStructure",
+            "types": "Dataset",
+            "page": 1,
+            "pageSize": 25,
+        }
+        last_error: Exception | None = None
+        for attempt in range(1, self.config.api_retries + 1):
+            try:
+                response = self.session.get(
+                    search_url,
+                    params=params,
+                    headers=headers,
+                    timeout=60,
+                    verify=False if self.config.debug_local_test else True,
+                )
+                response.raise_for_status()
+                raw_total = response.headers.get("x-paging-totalrows")
+                if raw_total is None:
+                    raise ValueError(f"i14y search response has no x-paging-totalrows header: {search_url}")
+                total = int(raw_total)
+                if total < 0:
+                    raise ValueError(f"i14y search returned a negative x-paging-totalrows value: {raw_total}")
+                return total
+            except Exception as error:
+                last_error = error
+                if attempt < self.config.api_retries:
+                    sleep(random.uniform(1, 2))
+        raise RuntimeError(
+            f"i14y structured-dataset count failed after {self.config.api_retries} attempts: {search_url}"
+        ) from last_error
+
     def get_dataset(self, dataset_id: str) -> dict[str, Any]:
         payload = self._get_json(f"{self.config.datasets_api_url}/{dataset_id}")
         data = payload.get("data")

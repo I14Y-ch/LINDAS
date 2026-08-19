@@ -139,5 +139,29 @@ class VocabularyProtectionTests(unittest.TestCase):
 
         self.assertEqual(0, len(graph))
 
+    def test_concept_status_counts_use_i14y_search_headers(self) -> None:
+        class SearchResponse:
+            def __init__(self, total: str):
+                self.headers = {"x-paging-totalrows": total}
+
+            def raise_for_status(self) -> None:
+                return None
+
+        with patch(
+            "concept2sharedDimension.src.versioning.utils.r.get",
+            side_effect=[SearchResponse("92"), SearchResponse("14")],
+        ) as get:
+            counts = I14YAPIHelper.get_concept_status_counts(["Standard", "PreferredStandard"])
+
+        self.assertEqual({"Standard": 92, "PreferredStandard": 14}, counts)
+        self.assertEqual(
+            {
+                "registrationStatuses": "Standard",
+                "types": "Concept",
+                "page": 1,
+                "pageSize": 25,
+            },
+            get.call_args_list[0].kwargs["params"],
+        )
 if __name__ == "__main__":
     unittest.main()

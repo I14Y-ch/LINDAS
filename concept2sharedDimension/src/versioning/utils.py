@@ -649,6 +649,50 @@ class I14YAPIHelper:
             f"Could not load protected vocabulary configurations from {VOCABULARY_CONFIGURATIONS_URL}"
         ) from last_error
     @staticmethod
+    def get_concept_status_counts(registration_statuses=None):
+        """Read one i14y search count per requested concept registration status."""
+        statuses = registration_statuses if registration_statuses is not None else STATUSES
+        statuses = list(dict.fromkeys(str(status).strip() for status in statuses if str(status).strip()))
+        counts = {}
+        for status in statuses:
+            last_error = None
+            for attempt in range(1, 11):
+                try:
+                    response = r.get(
+                        I14Y_SEARCH_URL,
+                        params={
+                            "registrationStatuses": status,
+                            "types": "Concept",
+                            "page": 1,
+                            "pageSize": 25,
+                        },
+                        verify=False if DEBUG_LOCAL_TEST else True,
+                        headers={"User-Agent": I14Y_USER_AGENT},
+                    )
+                    response.raise_for_status()
+                    raw_total = response.headers.get("x-paging-totalrows")
+                    if raw_total is None:
+                        raise ValueError(
+                            f"i14y search response has no x-paging-totalrows header for status {status}"
+                        )
+                    total = int(raw_total)
+                    if total < 0:
+                        raise ValueError(
+                            f"i14y search returned a negative x-paging-totalrows value for status {status}: {raw_total}"
+                        )
+                    counts[status] = total
+                    break
+                except Exception as error:
+                    last_error = error
+                    if attempt < 10:
+                        sleep(random.uniform(1, 2))
+            else:
+                raise RuntimeError(
+                    f"Could not read i14y concept count for registration status {status}"
+                ) from last_error
+        return counts
+
+    @staticmethod
     def get_all_concepts(registration_statuses=None, pageSize=50):
         """Get all CodeList concepts with specified registration statuses"""
         if not I14YAPIHelper.local_id_concepts_map:

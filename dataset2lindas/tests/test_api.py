@@ -33,11 +33,12 @@ def make_config() -> DatasetConfig:
 
 
 class Response:
-    def __init__(self, payload=None, *, text="", content=None, status_code=204):
+    def __init__(self, payload=None, *, text="", content=None, status_code=204, headers=None):
         self.payload = payload or {}
         self.status_code = status_code
         self.text = text
         self.content = content if content is not None else text.encode("utf-8")
+        self.headers = headers or {}
 
     def raise_for_status(self):
         return None
@@ -77,6 +78,21 @@ class ApiTests(unittest.TestCase):
             {"page": 2, "pageSize": 2}, session.get_calls[1][1]["params"]
         )
 
+    def test_structured_dataset_count_uses_i14y_search_header(self):
+        class SearchSession(Session):
+            def get(self, url, **kwargs):
+                self.get_calls.append((url, kwargs))
+                return Response(headers={"x-paging-totalrows": "989"})
+
+        session = SearchSession()
+        count = I14YDatasetsAPI(make_config(), session).get_structured_dataset_count()
+
+        self.assertEqual(989, count)
+        self.assertEqual("https://api.example/search", session.get_calls[0][0])
+        self.assertEqual(
+            {"structure": "WithStructure", "types": "Dataset", "page": 1, "pageSize": 25},
+            session.get_calls[0][1]["params"],
+        )
     def test_existing_datasets_reads_dct_identifier_without_uri_prefix_filter(self):
         api = LindasDatasetsAPI(make_config(), Session())
         queries = []

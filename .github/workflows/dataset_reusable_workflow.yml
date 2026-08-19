@@ -49,6 +49,7 @@ jobs:
     outputs:
       total_to_process: ${{ steps.plan.outputs.total_to_process }}
       source_count: ${{ steps.plan.outputs.source_count }}
+      source_structure_count: ${{ steps.plan.outputs.source_structure_count }}
       batch_matrix: ${{ steps.plan.outputs.batch_matrix }}
       should_finalize: ${{ steps.plan.outputs.should_finalize }}
     steps:
@@ -65,12 +66,23 @@ jobs:
           python - <<'PY'
           import json
           import os
+          from concurrent.futures import ThreadPoolExecutor
           from dataset2lindas.src.api import I14YDatasetsAPI, LindasDatasetsAPI
           from dataset2lindas.src.config import DatasetConfig
           from dataset2lindas.src.synchronizer import DatasetSynchronizer
 
           config = DatasetConfig.from_env()
-          plan = DatasetSynchronizer(config, I14YDatasetsAPI(config), LindasDatasetsAPI(config)).build_plan()
+          i14y = I14YDatasetsAPI(config)
+          with ThreadPoolExecutor(max_workers=1) as executor:
+              structure_count_future = executor.submit(I14YDatasetsAPI(config).get_structured_dataset_count)
+              source_datasets = i14y.get_all_datasets()
+              source_structure_count = structure_count_future.result()
+          plan = DatasetSynchronizer(config, i14y, LindasDatasetsAPI(config)).build_plan(source_datasets)
+          if source_structure_count > len(plan.source_identifiers):
+              raise RuntimeError(
+                  "i14y reported more datasets with structures than total source datasets: "
+                  f"{source_structure_count} > {len(plan.source_identifiers)}"
+              )
           plan.write("dataset_sync_plan.json")
           batch_size = int(os.environ["DATASET_BATCH_SIZE"])
           batches = [plan.process_ids[index:index + batch_size] for index in range(0, len(plan.process_ids), batch_size)]
@@ -82,9 +94,11 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               print(f"total_to_process={len(plan.process_ids)}", file=output)
               print(f"source_count={len(plan.source_identifiers)}", file=output)
+              print(f"source_structure_count={source_structure_count}", file=output)
               print(f"batch_matrix={json.dumps(matrix)}", file=output)
               print(f"should_finalize={'true' if should_finalize else 'false'}", file=output)
           print(f"Source datasets: {len(plan.source_identifiers)}")
+          print(f"Source datasets with structures: {source_structure_count}")
           print(f"Datasets to write: {len(plan.process_ids)}")
           print(f"Datasets to delete: {len(plan.delete_identifiers)}")
           PY
@@ -240,13 +254,88 @@ jobs:
           LindasDatasetsAPI(DatasetConfig.from_env()).delete_orphaned_publisher_agents()
           PY
 
+  verify-source-metrics:
+    needs: [get-datasets, reconcile-and-upload]
+    if: ${{ always() && needs.get-datasets.result == 'success' && (needs.reconcile-and-upload.result == 'success' || needs.reconcile-and-upload.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_DATASET_COUNT: ${{ needs.get-datasets.outputs.source_count }}
+      SOURCE_STRUCTURE_COUNT: ${{ needs.get-datasets.outputs.source_structure_count }}
+      STARDOG_USER: ${{ secrets.STARDOG_USER }}
+      STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compare imported datasets and structures
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+
+          from dataset2lindas.src.api import LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+
+          config = DatasetConfig.from_env()
+          query = f'''\
+          PREFIX dcat: <http://www.w3.org/ns/dcat#>
+          PREFIX dct: <http://purl.org/dc/terms/>
+          SELECT
+            (COUNT(DISTINCT ?dataset) AS ?dataset_count)
+            (COUNT(DISTINCT ?structured_dataset) AS ?structure_count)
+          WHERE {{
+            GRAPH <{config.target_graph}> {{
+              ?dataset a dcat:Dataset .
+              OPTIONAL {{
+                ?dataset dct:conformsTo ?structure .
+                FILTER(
+                  isIRI(?structure) &&
+                  STR(?structure) = CONCAT(STR(?dataset), "/structure")
+                )
+                BIND(?dataset AS ?structured_dataset)
+              }}
+            }}
+          }}
+          '''
+          rows = LindasDatasetsAPI(config).query(query)
+          if len(rows) != 1:
+              raise RuntimeError(f"Expected one dataset metric row from LINDAS, got {len(rows)}")
+
+          source_counts = {
+              "datasets": int(os.environ["SOURCE_DATASET_COUNT"]),
+              "structures": int(os.environ["SOURCE_STRUCTURE_COUNT"]),
+          }
+          target_counts = {
+              "datasets": int(rows[0]["dataset_count"]["value"]),
+              "structures": int(rows[0]["structure_count"]["value"]),
+          }
+          summary = [
+              "## Dataset source/LINDAS metrics",
+              "",
+              "| Metric | i14y | LINDAS |",
+              "| --- | ---: | ---: |",
+              f"| Datasets | {source_counts['datasets']} | {target_counts['datasets']} |",
+              f"| Datasets with structure | {source_counts['structures']} | {target_counts['structures']} |",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+
+          print(f"i14y dataset metrics: {source_counts}")
+          print(f"LINDAS dataset metrics: {target_counts}")
+          if target_counts != source_counts:
+              raise RuntimeError("Dataset source/LINDAS metrics do not match")
+          PY
   final-summary:
-    needs: [get-datasets, process-batches, reconcile-and-upload]
+    needs: [get-datasets, process-batches, reconcile-and-upload, verify-source-metrics]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Summary
         run: |
           echo "Source datasets: ${{ needs.get-datasets.outputs.source_count }}"
+          echo "Source datasets with structures: ${{ needs.get-datasets.outputs.source_structure_count }}"
           echo "Datasets exported: ${{ needs.get-datasets.outputs.total_to_process }}"
           echo "Target graph: ${{ env.TARGET_GRAPH }}"
