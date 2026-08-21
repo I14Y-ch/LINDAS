@@ -213,6 +213,60 @@ class VocabularyProtectionTests(unittest.TestCase):
             I14YAPIHelper.source_concept_status_counts = saved_counts
             I14YAPIHelper.source_inventory_loaded = saved_inventory_loaded
 
+    def test_completely_empty_codelist_is_excluded_from_batches_and_metrics(self) -> None:
+        empty = {
+            "id": "empty",
+            "identifiers": ["EMPTY"],
+            "version": "1.0.0",
+            "validFrom": "2026-01-01",
+            "registrationStatus": "Recorded",
+            "conceptType": "CodeList",
+        }
+        non_empty = {
+            "id": "non-empty",
+            "identifiers": ["NON_EMPTY"],
+            "version": "1.0.0",
+            "validFrom": "2026-01-01",
+            "registrationStatus": "Recorded",
+            "conceptType": "CodeList",
+        }
+        saved_ids = I14YAPIHelper.local_id_concepts_map
+        saved_versions = I14YAPIHelper.local_identifier_concepts_map
+        saved_counts = I14YAPIHelper.source_concept_status_counts
+        saved_statuses = I14YAPIHelper.source_registration_statuses
+        saved_inventory_loaded = I14YAPIHelper.source_inventory_loaded
+        try:
+            I14YAPIHelper.local_id_concepts_map = {"empty": empty, "non-empty": non_empty}
+            I14YAPIHelper.local_identifier_concepts_map = {"EMPTY": [empty], "NON_EMPTY": [non_empty]}
+            I14YAPIHelper.source_concept_status_counts = {"Recorded": 2}
+            I14YAPIHelper.source_registration_statuses = ("Recorded",)
+            I14YAPIHelper.source_inventory_loaded = True
+
+            details = {
+                "empty": {**empty, "codeListEntries": []},
+                "non-empty": {**non_empty, "codeListEntries": [{"code": "A"}]},
+            }
+            with patch.object(
+                I14YAPIHelper,
+                "get_concept_data",
+                side_effect=lambda concept_id: {"data": details[concept_id]},
+            ), patch.object(
+                I14YAPIHelper,
+                "get_version_list",
+                side_effect=lambda identifier: [details["empty" if identifier == "EMPTY" else "non-empty"]],
+            ):
+                batches = I14YAPIHelper.get_concept_batches()
+
+            self.assertEqual([["non-empty"]], batches)
+            self.assertEqual({"NON_EMPTY"}, set(I14YAPIHelper.local_identifier_concepts_map))
+            self.assertEqual({"non-empty"}, set(I14YAPIHelper.local_id_concepts_map))
+            self.assertEqual({"Recorded": 1}, I14YAPIHelper.get_exported_concept_status_counts(["Recorded"]))
+        finally:
+            I14YAPIHelper.local_id_concepts_map = saved_ids
+            I14YAPIHelper.local_identifier_concepts_map = saved_versions
+            I14YAPIHelper.source_concept_status_counts = saved_counts
+            I14YAPIHelper.source_registration_statuses = saved_statuses
+            I14YAPIHelper.source_inventory_loaded = saved_inventory_loaded
     def test_export_manifest_is_reused_by_a_fresh_batch_process(self) -> None:
         status = STATUSES[0]
         old_version = {

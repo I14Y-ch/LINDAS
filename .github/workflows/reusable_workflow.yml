@@ -84,6 +84,7 @@ jobs:
           from concept2sharedDimension.src.versioning.utils import I14YAPIHelper
           from concept2sharedDimension.src.versioning.config import USE_STATUSES, STATUSES, CONCEPT_IDS
           print("Using status-based filtering")
+          batches = I14YAPIHelper.get_concept_batches()
           concepts = I14YAPIHelper.get_all_concepts()
           source_status_counts = I14YAPIHelper.get_exported_concept_status_counts(STATUSES)
           ids = [c["id"] for c in concepts]
@@ -94,7 +95,6 @@ jobs:
           I14YAPIHelper.write_export_manifest(manifest_path)
           print(f"Wrote frozen source manifest: {manifest_path}")
 
-          batches = I14YAPIHelper.get_concept_batches()
           n_batches = len(batches)
           print(f"Will create {n_batches} batches")
 

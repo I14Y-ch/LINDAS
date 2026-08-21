@@ -611,6 +611,7 @@ class I14YAPIHelper:
 
     # Status counts from the exact CodeList version inventory selected for export.
     source_concept_status_counts = {}
+    source_registration_statuses = ()
 
     # ``local_id_concepts_map`` is also the metadata cache used by
     # ``get_concept_data``. Keep a distinct flag so a manifest can preload a
@@ -660,7 +661,7 @@ class I14YAPIHelper:
     @staticmethod
     def get_concept_status_counts(registration_statuses=None):
         """Read one i14y search count per requested concept registration status."""
-        statuses = registration_statuses if registration_statuses is not None else STATUSES
+        statuses = registration_statuses if registration_statuses is not None else (I14YAPIHelper.source_registration_statuses or STATUSES)
         statuses = list(dict.fromkeys(str(status).strip() for status in statuses if str(status).strip()))
         counts = {}
         for status in statuses:
@@ -714,6 +715,7 @@ class I14YAPIHelper:
 
             if registration_statuses is None:
                 registration_statuses = STATUSES
+            I14YAPIHelper.source_registration_statuses = tuple(registration_statuses)
 
             base_url = f"{BASE_API_URL}"
             all_public_concepts = []
@@ -781,15 +783,7 @@ class I14YAPIHelper:
                 ):
                     I14YAPIHelper.local_identifier_concepts_map.setdefault(identifier, []).append(concept)
 
-            I14YAPIHelper.source_concept_status_counts = {
-                status: sum(
-                    1
-                    for versions in I14YAPIHelper.local_identifier_concepts_map.values()
-                    for concept in versions
-                    if concept.get("registrationStatus") == status
-                )
-                for status in registration_statuses
-            }
+            I14YAPIHelper._refresh_exported_concept_status_counts(registration_statuses)
 
             for index, concept in enumerate(latest_concepts.values(), 1):
                 print(f"{index}. Identifier: {concept.get('identifiers')[0]}")
@@ -803,9 +797,23 @@ class I14YAPIHelper:
         return list(I14YAPIHelper.local_id_concepts_map.values())
 
     @staticmethod
+    def _refresh_exported_concept_status_counts(registration_statuses=None):
+        """Recompute metrics from the current, final export inventory."""
+        statuses = registration_statuses if registration_statuses is not None else (I14YAPIHelper.source_registration_statuses or STATUSES)
+        I14YAPIHelper.source_concept_status_counts = {
+            status: sum(
+                1
+                for versions in I14YAPIHelper.local_identifier_concepts_map.values()
+                for concept in versions
+                if concept.get("registrationStatus") == status
+            )
+            for status in statuses
+        }
+
+    @staticmethod
     def get_exported_concept_status_counts(registration_statuses=None):
         """Return status counts from the exact source inventory selected for export."""
-        statuses = registration_statuses if registration_statuses is not None else STATUSES
+        statuses = registration_statuses if registration_statuses is not None else (I14YAPIHelper.source_registration_statuses or STATUSES)
         return {status: I14YAPIHelper.source_concept_status_counts.get(status, 0) for status in statuses}
 
     @staticmethod
@@ -912,6 +920,39 @@ class I14YAPIHelper:
             for future in as_completed(futures):
                 concept_id, data = future.result()
                 all_concept_data[concept_id] = data
+
+        # An entirely empty CodeList has no useful shared-dimension content.
+        # Fetch every selected version before freezing the inventory, so the
+        # decision is identical for the matrix, every batch and the metrics.
+        def fetch_versions(concept):
+            identifier = concept["identifiers"][0]
+            return concept["id"], identifier, I14YAPIHelper.get_version_list(identifier)
+
+        empty_identifiers = set()
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(fetch_versions, concept) for concept in all_concepts]
+            for future in as_completed(futures):
+                concept_id, identifier, versions = future.result()
+                if not any(version.get("codeListEntries") for version in versions):
+                    print(f"Skipping empty CodeList {identifier}")
+                    empty_identifiers.add(identifier)
+                    all_concept_data.pop(concept_id, None)
+
+        if empty_identifiers:
+            I14YAPIHelper.local_id_concepts_map = {
+                concept_id: concept
+                for concept_id, concept in I14YAPIHelper.local_id_concepts_map.items()
+                if concept.get("identifiers", [None])[0] not in empty_identifiers
+            }
+            I14YAPIHelper.local_identifier_concepts_map = {
+                identifier: versions
+                for identifier, versions in I14YAPIHelper.local_identifier_concepts_map.items()
+                if identifier not in empty_identifiers
+            }
+            I14YAPIHelper._refresh_exported_concept_status_counts()
+
+        if not all_concept_data:
+            return []
 
         # 4. Compute size of each concept (number of codeListEntries)
         concept_sizes = [(cid, len(data.get("codeListEntries", []))) for cid, data in all_concept_data.items()]
