@@ -14,6 +14,53 @@ from .config import DatasetConfig
 
 
 @dataclass(frozen=True)
+class DatasetSourceManifest:
+    """Frozen i14y dataset inventory shared by every job of one workflow run."""
+
+    datasets: list[dict[str, Any]]
+    structured_dataset_count: int
+
+    @property
+    def source_identifiers(self) -> list[str]:
+        return sorted(DatasetSynchronizer._source_by_identifier(self.datasets))
+
+    @property
+    def dataset_ids(self) -> set[str]:
+        return {
+            str(dataset["id"])
+            for dataset in self.datasets
+            if dataset.get("id") is not None
+        }
+
+    def validate_batch_ids(self, dataset_ids: list[str]) -> None:
+        unexpected = sorted(set(dataset_ids) - self.dataset_ids)
+        if unexpected:
+            raise ValueError(
+                "Dataset batch contains id(s) absent from the frozen source manifest: "
+                + ", ".join(unexpected)
+            )
+
+    def write(self, path: str | Path) -> None:
+        payload = {"schemaVersion": 1, **asdict(self)}
+        Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    @classmethod
+    def read(cls, path: str | Path) -> "DatasetSourceManifest":
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        if payload.get("schemaVersion") != 1:
+            raise RuntimeError(f"Unsupported dataset source manifest schema in {path}")
+        datasets = payload.get("datasets")
+        structured_dataset_count = payload.get("structured_dataset_count")
+        if not isinstance(datasets, list) or not isinstance(structured_dataset_count, int):
+            raise RuntimeError(f"Invalid dataset source manifest {path}")
+        manifest = cls(datasets=datasets, structured_dataset_count=structured_dataset_count)
+        # Validate identifiers and duplicate primary identifiers before any
+        # separate workflow job can use the artifact.
+        DatasetSynchronizer._source_by_identifier(manifest.datasets)
+        return manifest
+
+
+@dataclass(frozen=True)
 class SyncPlan:
     process_ids: list[str]
     delete_identifiers: list[str]

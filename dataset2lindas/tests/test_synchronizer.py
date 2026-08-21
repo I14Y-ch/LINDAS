@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from dataset2lindas.src.config import DatasetConfig
-from dataset2lindas.src.synchronizer import DatasetSynchronizer
+from dataset2lindas.src.synchronizer import DatasetSourceManifest, DatasetSynchronizer
 
 
 def make_config() -> DatasetConfig:
@@ -69,6 +71,22 @@ class DatasetSynchronizerTests(unittest.TestCase):
         self.assertEqual(["changed", "missing-timestamp", "orphan"], plan.delete_identifiers)
         synchronizer.apply_deletions(plan)
         self.assertEqual(plan.delete_identifiers, lindas.deleted)
+
+    def test_source_manifest_round_trip_freezes_inventory_and_validates_batches(self):
+        datasets = [
+            dataset("FIRST", "1", "2026-01-01T00:00:00+00:00"),
+            dataset("SECOND", "2", "2026-01-02T00:00:00+00:00"),
+        ]
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "dataset_source_manifest.json"
+            DatasetSourceManifest(datasets, 1).write(path)
+            restored = DatasetSourceManifest.read(path)
+
+        self.assertEqual(["FIRST", "SECOND"], restored.source_identifiers)
+        self.assertEqual(1, restored.structured_dataset_count)
+        restored.validate_batch_ids(["1", "2"])
+        with self.assertRaisesRegex(ValueError, "absent from the frozen source manifest"):
+            restored.validate_batch_ids(["missing"])
 
     def test_parse_modified_at_accepts_high_precision_and_rejects_invalid_values(self):
         parsed = DatasetSynchronizer.parse_modified_at(

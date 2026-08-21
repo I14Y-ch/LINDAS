@@ -2,6 +2,7 @@ import heapq
 import json
 import random
 import re
+from pathlib import Path
 from time import time, sleep
 from urllib.parse import urlparse
 import requests as r
@@ -611,6 +612,11 @@ class I14YAPIHelper:
     # Status counts from the exact CodeList version inventory selected for export.
     source_concept_status_counts = {}
 
+    # ``local_id_concepts_map`` is also the metadata cache used by
+    # ``get_concept_data``. Keep a distinct flag so a manifest can preload a
+    # sparse cache without triggering a second, potentially different, source scan.
+    source_inventory_loaded = False
+
     # Pairs from the core vocabulary configuration endpoint. None means not loaded yet.
     protected_vocabulary_versions = None
 
@@ -703,7 +709,7 @@ class I14YAPIHelper:
         Every matching CodeList version is exportable, even if another version
         of the same identifier has a different concept type.
         """
-        if not I14YAPIHelper.local_id_concepts_map:
+        if not I14YAPIHelper.source_inventory_loaded:
             print("DEBUG: get_all_concepts API call")
 
             if registration_statuses is None:
@@ -792,6 +798,8 @@ class I14YAPIHelper:
                 print(f"   Version: {concept.get('version')}\n")
                 I14YAPIHelper.local_id_concepts_map[concept["id"]] = concept
 
+            I14YAPIHelper.source_inventory_loaded = True
+
         return list(I14YAPIHelper.local_id_concepts_map.values())
 
     @staticmethod
@@ -808,6 +816,83 @@ class I14YAPIHelper:
             for concept in I14YAPIHelper.local_identifier_concepts_map.get(concept_identifier, [])
             if concept.get("version") is not None
         }
+
+    @staticmethod
+    def write_export_manifest(path):
+        """Persist the exact public CodeList version inventory for this run."""
+        if not I14YAPIHelper.source_inventory_loaded:
+            raise RuntimeError("Cannot write a concept manifest before the source inventory is loaded")
+
+        version_fields = (
+            "id",
+            "identifiers",
+            "version",
+            "validFrom",
+            "registrationStatus",
+            "conceptType",
+            "system",
+        )
+        versions = [
+            {field: concept[field] for field in version_fields if field in concept}
+            for identifier_versions in I14YAPIHelper.local_identifier_concepts_map.values()
+            for concept in identifier_versions
+        ]
+        manifest = {
+            "schemaVersion": 1,
+            # The representative records contain the metadata used by the RDF
+            # mapper; the version list below is the frozen export inventory.
+            "selectedConcepts": list(I14YAPIHelper.local_id_concepts_map.values()),
+            "versions": versions,
+        }
+        Path(path).write_text(
+            json.dumps(manifest, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def load_export_manifest(path):
+        """Load a frozen source inventory produced by ``write_export_manifest``."""
+        try:
+            manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise RuntimeError(f"Could not read concept export manifest {path}") from error
+
+        if manifest.get("schemaVersion") != 1:
+            raise RuntimeError(f"Unsupported concept export manifest schema in {path}")
+
+        versions = manifest.get("versions")
+        selected_concepts = manifest.get("selectedConcepts")
+        if not isinstance(versions, list) or not isinstance(selected_concepts, list):
+            raise RuntimeError(f"Invalid concept export manifest {path}")
+
+        records_by_id = {}
+        versions_by_identifier = {}
+        for concept in versions:
+            identifiers = concept.get("identifiers") if isinstance(concept, dict) else None
+            concept_id = concept.get("id") if isinstance(concept, dict) else None
+            if not concept_id or not identifiers or not identifiers[0] or concept.get("version") is None:
+                raise RuntimeError(f"Invalid concept version in export manifest {path}")
+            records_by_id[concept_id] = concept
+            versions_by_identifier.setdefault(identifiers[0], []).append(concept)
+
+        selected_records = {}
+        for concept in selected_concepts:
+            concept_id = concept.get("id") if isinstance(concept, dict) else None
+            if concept_id not in records_by_id:
+                raise RuntimeError(f"Selected concept {concept_id} is absent from export manifest {path}")
+            selected_records[concept_id] = concept
+
+        I14YAPIHelper.local_id_concepts_map = selected_records
+        I14YAPIHelper.local_identifier_concepts_map = versions_by_identifier
+        I14YAPIHelper.source_concept_status_counts = {
+            status: sum(
+                1
+                for concept in versions
+                if concept.get("registrationStatus") == status
+            )
+            for status in STATUSES
+        }
+        I14YAPIHelper.source_inventory_loaded = True
 
     @staticmethod
     def get_concept_batches():
@@ -1017,7 +1102,14 @@ class I14YAPIHelper:
         for version in sorted_versions:
             data = I14YAPIHelper.get_concept_data(version["id"])
             if data is not None:
-                version_data.append(data["data"])
+                concept_data = data["data"]
+                # Metadata in the manifest/source scan determines which
+                # versions and statuses this run exports. Details are fetched
+                # later, but must not silently alter the frozen inventory.
+                for field in ("id", "identifiers", "version", "validFrom", "registrationStatus", "conceptType"):
+                    if field in version:
+                        concept_data[field] = version[field]
+                version_data.append(concept_data)
             else:
                 failed_concepts.append(version["id"])
 

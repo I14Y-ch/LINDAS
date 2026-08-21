@@ -73,11 +73,11 @@ jobs:
           from concurrent.futures import ThreadPoolExecutor
           from dataset2lindas.src.api import I14YDatasetsAPI, LindasDatasetsAPI
           from dataset2lindas.src.config import DatasetConfig
-          from dataset2lindas.src.synchronizer import DatasetSynchronizer
+          from dataset2lindas.src.synchronizer import DatasetSourceManifest, DatasetSynchronizer
 
           config = DatasetConfig.from_env()
           i14y = I14YDatasetsAPI(config)
-          with ThreadPoolExecutor(max_workers=1) as executor:
+          with ThreadPoolExecutor(max_workers=2) as executor:
               structure_count_future = executor.submit(I14YDatasetsAPI(config).get_structured_dataset_count)
               source_datasets = i14y.get_all_datasets()
               source_structure_count = structure_count_future.result()
@@ -88,6 +88,7 @@ jobs:
                   f"{source_structure_count} > {len(plan.source_identifiers)}"
               )
           plan.write("dataset_sync_plan.json")
+          DatasetSourceManifest(source_datasets, source_structure_count).write("dataset_source_manifest.json")
           batch_size = int(os.environ["DATASET_BATCH_SIZE"])
           batches = [plan.process_ids[index:index + batch_size] for index in range(0, len(plan.process_ids), batch_size)]
           matrix = {"include": [
@@ -111,6 +112,12 @@ jobs:
         with:
           name: dataset-sync-plan-${{ github.run_id }}
           path: dataset_sync_plan.json
+      - name: Archive frozen dataset source manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataset-source-manifest-${{ github.run_id }}
+          path: dataset_source_manifest.json
+          if-no-files-found: error
 
   process-batches:
     needs: get-datasets
@@ -122,6 +129,11 @@ jobs:
       matrix: ${{ fromJSON(needs.get-datasets.outputs.batch_matrix) }}
     steps:
       - uses: actions/checkout@v4
+      - name: Download frozen dataset source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: dataset-source-manifest-${{ github.run_id }}
+          path: reconciliation
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -133,6 +145,7 @@ jobs:
       - name: Export dataset batch ${{ matrix.batch_index }}
         env:
           BATCH_DATASET_IDS: ${{ matrix.dataset_ids }}
+          I14Y_DATASET_MANIFEST_PATH: reconciliation/dataset_source_manifest.json
         run: python -m dataset2lindas.src.main --batch-index ${{ matrix.batch_index }}
       - name: Validate Turtle
         shell: bash
@@ -180,6 +193,11 @@ jobs:
         with:
           name: dataset-sync-plan-${{ github.run_id }}
           path: reconciliation
+      - name: Download frozen dataset source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: dataset-source-manifest-${{ github.run_id }}
+          path: reconciliation
       - name: Download validated dataset batches
         if: ${{ needs.get-datasets.outputs.total_to_process != '0' }}
         uses: actions/download-artifact@v4
@@ -215,6 +233,8 @@ jobs:
           PY
       - name: Build the optional common dataset catalogue
         if: env.CREATE_DATASET_CATALOG == 'true'
+        env:
+          I14Y_DATASET_MANIFEST_PATH: reconciliation/dataset_source_manifest.json
         run: |
           python -m dataset2lindas.src.main --catalog-only --output dataset_catalog.ttl
           rapper -i turtle -c dataset_catalog.ttl
@@ -263,12 +283,15 @@ jobs:
     if: ${{ always() && needs.get-datasets.result == 'success' && (needs.reconcile-and-upload.result == 'success' || needs.reconcile-and-upload.result == 'skipped') }}
     runs-on: ${{ inputs.RUNNER }}
     env:
-      SOURCE_DATASET_COUNT: ${{ needs.get-datasets.outputs.source_count }}
-      SOURCE_STRUCTURE_COUNT: ${{ needs.get-datasets.outputs.source_structure_count }}
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+      - name: Download frozen dataset source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: dataset-source-manifest-${{ github.run_id }}
+          path: reconciliation
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -282,8 +305,10 @@ jobs:
 
           from dataset2lindas.src.api import LindasDatasetsAPI
           from dataset2lindas.src.config import DatasetConfig
+          from dataset2lindas.src.synchronizer import DatasetSourceManifest
 
           config = DatasetConfig.from_env()
+          source_manifest = DatasetSourceManifest.read("reconciliation/dataset_source_manifest.json")
           query = f'''\
           PREFIX dcat: <http://www.w3.org/ns/dcat#>
           PREFIX dct: <http://purl.org/dc/terms/>
@@ -309,8 +334,8 @@ jobs:
               raise RuntimeError(f"Expected one dataset metric row from LINDAS, got {len(rows)}")
 
           source_counts = {
-              "datasets": int(os.environ["SOURCE_DATASET_COUNT"]),
-              "structures": int(os.environ["SOURCE_STRUCTURE_COUNT"]),
+              "datasets": len(source_manifest.source_identifiers),
+              "structures": source_manifest.structured_dataset_count,
           }
           target_counts = {
               "datasets": int(rows[0]["dataset_count"]["value"]),

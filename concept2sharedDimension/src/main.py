@@ -18,8 +18,15 @@ def main():
 
     args = parser.parse_args()
 
-    # We get a first time all the concepts, then we can get individual concept data from memory instead of individually fetching each one when needed
-    I14YAPIHelper.get_all_concepts()
+    # Workflow batches receive the same source inventory that built their
+    # matrix. This prevents a change on i14y during the run from changing the
+    # set of versions emitted by a later batch.
+    manifest_path = os.environ.get("I14Y_CONCEPT_MANIFEST_PATH", "").strip()
+    if manifest_path:
+        I14YAPIHelper.load_export_manifest(manifest_path)
+        print(f"Loaded frozen concept export manifest: {manifest_path}")
+    else:
+        I14YAPIHelper.get_all_concepts()
 
     batch_concept_ids = os.environ.get('BATCH_CONCEPT_IDS', '').strip()
 

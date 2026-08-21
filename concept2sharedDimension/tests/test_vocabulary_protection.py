@@ -9,7 +9,7 @@ from rdflib import ConjunctiveGraph, Graph, Literal, Namespace, URIRef
 ORG = Namespace("http://www.w3.org/ns/org#")
 from rdflib.namespace import DCTERMS, RDF, FOAF
 
-from concept2sharedDimension.src.versioning.config import AGENT_URI_BASE, BASE_URI, TARGET_GRAPH
+from concept2sharedDimension.src.versioning.config import AGENT_URI_BASE, BASE_URI, STATUSES, TARGET_GRAPH
 from concept2sharedDimension.src.versioning.core import ConceptMetadataManager, GraphManager
 from concept2sharedDimension.src.versioning.processor import VersionProcessor
 
@@ -188,10 +188,12 @@ class VocabularyProtectionTests(unittest.TestCase):
         saved_ids = I14YAPIHelper.local_id_concepts_map
         saved_versions = I14YAPIHelper.local_identifier_concepts_map
         saved_counts = I14YAPIHelper.source_concept_status_counts
+        saved_inventory_loaded = I14YAPIHelper.source_inventory_loaded
         try:
             I14YAPIHelper.local_id_concepts_map = {}
             I14YAPIHelper.local_identifier_concepts_map = {}
             I14YAPIHelper.source_concept_status_counts = {}
+            I14YAPIHelper.source_inventory_loaded = False
             with patch(
                 "concept2sharedDimension.src.versioning.utils.r.get",
                 return_value=ConceptsResponse(rows),
@@ -209,6 +211,77 @@ class VocabularyProtectionTests(unittest.TestCase):
             I14YAPIHelper.local_id_concepts_map = saved_ids
             I14YAPIHelper.local_identifier_concepts_map = saved_versions
             I14YAPIHelper.source_concept_status_counts = saved_counts
+            I14YAPIHelper.source_inventory_loaded = saved_inventory_loaded
+
+    def test_export_manifest_is_reused_by_a_fresh_batch_process(self) -> None:
+        status = STATUSES[0]
+        old_version = {
+            "id": "frozen-old",
+            "identifiers": ["FROZEN"],
+            "version": "1.0.0",
+            "validFrom": "2025-01-01",
+            "registrationStatus": status,
+            "conceptType": "CodeList",
+        }
+        latest_version = {
+            "id": "frozen-latest",
+            "identifiers": ["FROZEN"],
+            "version": "2.0.0",
+            "validFrom": "2026-01-01",
+            "registrationStatus": status,
+            "conceptType": "CodeList",
+            "name": {"fr": "Frozen metadata"},
+        }
+        saved_ids = I14YAPIHelper.local_id_concepts_map
+        saved_versions = I14YAPIHelper.local_identifier_concepts_map
+        saved_counts = I14YAPIHelper.source_concept_status_counts
+        saved_inventory_loaded = I14YAPIHelper.source_inventory_loaded
+        try:
+            I14YAPIHelper.local_id_concepts_map = {latest_version["id"]: latest_version}
+            I14YAPIHelper.local_identifier_concepts_map = {"FROZEN": [old_version, latest_version]}
+            I14YAPIHelper.source_concept_status_counts = {status: 2}
+            I14YAPIHelper.source_inventory_loaded = True
+
+            with TemporaryDirectory() as directory:
+                manifest_path = Path(directory) / "concept_source_manifest.json"
+                I14YAPIHelper.write_export_manifest(manifest_path)
+
+                # Simulate the separate GitHub Actions batch process.
+                I14YAPIHelper.local_id_concepts_map = {}
+                I14YAPIHelper.local_identifier_concepts_map = {}
+                I14YAPIHelper.source_concept_status_counts = {}
+                I14YAPIHelper.source_inventory_loaded = False
+                I14YAPIHelper.load_export_manifest(manifest_path)
+
+                selected = I14YAPIHelper.get_all_concepts()
+                self.assertEqual([latest_version["id"]], [item["id"] for item in selected])
+                self.assertEqual({"fr": "Frozen metadata"}, selected[0]["name"])
+                self.assertEqual({status: 2}, I14YAPIHelper.get_exported_concept_status_counts([status]))
+                self.assertEqual({"1.0.0", "2.0.0"}, I14YAPIHelper.get_exported_concept_versions("FROZEN"))
+
+                def get_changed_detail(concept_id):
+                    return {
+                        "data": {
+                            "id": concept_id,
+                            "identifiers": ["FROZEN"],
+                            "version": "changed-after-scan",
+                            "validFrom": "2099-01-01",
+                            "registrationStatus": "ChangedAfterScan",
+                            "conceptType": "CodeList",
+                            "codeListEntries": [],
+                        }
+                    }
+
+                with patch.object(I14YAPIHelper, "get_concept_data", side_effect=get_changed_detail):
+                    version_data = I14YAPIHelper.get_version_list("FROZEN")
+
+            self.assertEqual(["1.0.0", "2.0.0"], [item["version"] for item in version_data])
+            self.assertEqual([status, status], [item["registrationStatus"] for item in version_data])
+        finally:
+            I14YAPIHelper.local_id_concepts_map = saved_ids
+            I14YAPIHelper.local_identifier_concepts_map = saved_versions
+            I14YAPIHelper.source_concept_status_counts = saved_counts
+            I14YAPIHelper.source_inventory_loaded = saved_inventory_loaded
 
     def test_version_set_difference_bypasses_modified_at_cutoff(self) -> None:
         concept = {

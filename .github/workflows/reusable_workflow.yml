@@ -90,6 +90,10 @@ jobs:
           print(f"Total concepts found with statuses {STATUSES}: {len(ids)}")
           print(f"Source concept versions by status: {source_status_counts}")
 
+          manifest_path = "concept_source_manifest.json"
+          I14YAPIHelper.write_export_manifest(manifest_path)
+          print(f"Wrote frozen source manifest: {manifest_path}")
+
           batches = I14YAPIHelper.get_concept_batches()
           n_batches = len(batches)
           print(f"Will create {n_batches} batches")
@@ -103,6 +107,12 @@ jobs:
               print(f"source_status_counts={source_status_counts_json}", file=gh)
               print(f"batch_matrix={json.dumps(matrix)}", file=gh)
           PY
+      - name: Archive frozen source manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: concept-source-manifest-${{ github.run_id }}
+          path: concept_source_manifest.json
+          if-no-files-found: error
       - name: Delete concepts on LINDAS that are not on I14Y
         if: env.CLEAR_GRAPH == 'false'
         id: delete-orhapned-concepts-lindas
@@ -127,6 +137,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Download frozen source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: concept-source-manifest-${{ github.run_id }}
+          path: reconciliation
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -154,6 +170,7 @@ jobs:
         if: steps.calc-batch.outputs.batch_ids != ''
         env:
           BATCH_CONCEPT_IDS: ${{ steps.calc-batch.outputs.batch_ids }}
+          I14Y_CONCEPT_MANIFEST_PATH: reconciliation/concept_source_manifest.json
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
         shell: bash
@@ -334,11 +351,15 @@ jobs:
     if: ${{ always() && needs.get-concepts.result == 'success' && (needs.clear-and-upload.result == 'success' || needs.clear-and-upload.result == 'skipped') }}
     runs-on: ${{ inputs.RUNNER }}
     env:
-      SOURCE_STATUS_COUNTS: ${{ needs.get-concepts.outputs.source_status_counts }}
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
       STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+      - name: Download frozen source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: concept-source-manifest-${{ github.run_id }}
+          path: reconciliation
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -352,9 +373,10 @@ jobs:
           import os
 
           from concept2sharedDimension.src.versioning.config import TARGET_GRAPH
-          from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
+          from concept2sharedDimension.src.versioning.utils import I14YAPIHelper, LindasAPIHelper
 
-          source_counts = json.loads(os.environ["SOURCE_STATUS_COUNTS"])
+          I14YAPIHelper.load_export_manifest("reconciliation/concept_source_manifest.json")
+          source_counts = I14YAPIHelper.get_exported_concept_status_counts()
           if not source_counts:
               raise RuntimeError("No source concept status metrics were recorded")
 
