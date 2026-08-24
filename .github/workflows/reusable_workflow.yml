@@ -122,7 +122,8 @@ jobs:
           STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
         run: |
           python - <<'PY'
-          from concept2sharedDimension.src.versioning.utils import delete_orphaned_concepts_lindas
+          from concept2sharedDimension.src.versioning.utils import I14YAPIHelper, delete_orphaned_concepts_lindas
+          I14YAPIHelper.load_export_manifest("concept_source_manifest.json")
           delete_orphaned_concepts_lindas()
           PY
   process-batches:
