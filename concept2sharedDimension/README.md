@@ -1,150 +1,96 @@
-# i14y concept mapping to lindas shared dimension
+# i14y concepts to LINDAS
 
-## File Structure
+`concept2sharedDimension` incrementally exports public i14y `CodeList` concepts to the LINDAS i14y graph:
 
+`https://lindas.admin.ch/fso/i14y`
+
+## Source inventory and incremental plan
+
+The exporter scans every public concept record from `BASE_API_URL` once per workflow run. It builds one frozen export inventory before creating batches or publishing any Turtle.
+
+For each primary concept identifier, the inventory is selected as follows:
+
+- Only `CodeList` records with a registration status configured in `STATUSES` are eligible.
+- The latest eligible CodeList record is used as the representative of an identifier.
+- All historical eligible CodeList versions of that selected identifier are included; versions of another concept type are ignored.
+- Identifiers in `EXCLUDED_IDS`, or without a usable primary identifier, are ignored.
+- An identifier is excluded when every selected CodeList version has no `codeListEntries`.
+
+The exporter fetches the selected versions before batching, then persists the resulting snapshot to `concept_source_manifest.json`. Batch generation, orphan reconciliation and the final metrics all reload that manifest, so a change in i14y during a workflow cannot make different workflow steps use different source inventories.
+
+With `CLEAR_GRAPH=false`, reconciliation is per concept identifier:
+
+| LINDAS state / source change | Action |
+| --- | --- |
+| Identifier absent from LINDAS | Import all selected versions. |
+| Exported source-version set differs from the LINDAS version set | Delete the identifier and import it again. |
+| `system.modifiedAt` is inside the configurable lookback window | Delete the identifier and import it again. |
+| `system.modifiedAt` is absent or invalid | Compare the selected versions, attributes and entries deeply; replace only if they differ. |
+| Identifier is absent from the frozen source inventory | Delete it from LINDAS during orphan reconciliation. |
+| No change detected | Produce no Turtle for that identifier. |
+
+The default lookback window is 24 hours and is extended to 96 hours on Mondays. With `CLEAR_GRAPH=true`, every selected identifier is exported and the workflow drops the target graph before the generated batches are uploaded.
+
+## RDF model and URIs
+
+Each concept has a persistent identity and one resource per version:
+
+```text
+https://register.ld.admin.ch/i14y/concept/{identifier}
+https://register.ld.admin.ch/i14y/concept/{identifier}/version/{version}
 ```
-Concept_mapping/
-├── src/
-│   ├── versioning/
-│   │   ├── __init__.py
-│   │   ├── config.py
-│   │   ├── core.py
-│   │   ├── processor.py
-│   │   └── utils.py
-│   └── main.py
-├── examples/
-│   └── noga_output.ttl
-└── README.md
+
+Code entries, hierarchy roots, levels and internal list nodes use the same concept prefix. Internal nodes are deterministically skolemized below:
+
+```text
+https://register.ld.admin.ch/i14y/concept/{identifier}/.well-known/genid/{hash}
 ```
 
-## Main components structure and functionalities
+Publishers are shared agents, not per-concept blank nodes:
 
-The main components are
+```text
+https://register.ld.admin.ch/i14y/agent/{publisher-identifier}
+```
 
-- Core Modules (core.py):
+The exporter maps the code-list hierarchy, multilingual metadata, version/identity relations and publisher information. A shared agent is removed only when no concept or dataset in the graph still references it.
 
-  - GraphManager: Handles RDF graph creation and URI generation
-  - CatalogManager: describe the i14y catalog based on void
-  - CodeListManager: Manages hierarchical code list structures and version-identity relationships
-  - ConceptMetadataManager: Handles concept scheme metadata
+## Reconciliation and deletion
 
-- Processing Flow (processor.py):
-  - The VersionProcessor handles the version processing pipeline: for each version, it creates both identity (persistent) and version-specific objects
-- utils.py: utility functions (API calls, ...)
-- config.py: configuration file
+Deletion uses a bounded RDF closure rooted in the concept URI. Dataset-structure `dct:conformsTo` links to concept resources are deliberately preserved when a concept is deleted; they disappear when the owning dataset structure is deleted.
 
-## How to use the script
+## Local usage
 
-**1. Install dependencies:**
+Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-**2. Configure the script:**
+Generate one batch without publishing it:
 
-Update `config.py` with yours configuration data, in particular you need to set:
-
-- You can either transform a list of concept based on statuses, in this case:
-  - Set `USE_STATUSES = True` # Set to False to use concept_ids
-  - Define the statuses that you are interested in with the variable `STATUSES`
-- Or you can transform a list of concept based on concept Ids, in this case:
-  - Set `USE_STATUSES = False`
-  - Define the ids that you are interested in, in the variable `CONCEPT_IDS`
-- Set the name of the output file in the variable `OUTPUT_FILE_NAME`
-
-**3. Run `main.py`.**
-
-**Note for script future use**: To add the type SharedDimension to the Concepts autmatically via the script, uncomment the following line (inside the class `ConceptMetadataManager` and function `add_scheme_metadata`):
-
-```
-self.vm.graph.add((uri, RDF.type, meta.SharedDimension))
-
+```bash
+$env:BATCH_CONCEPT_IDS = "<i14y-concept-uuid>"
+python -m concept2sharedDimension.src.main --batch-index 0
 ```
 
-## github Action - workflow
+The resulting Turtle file is `batch_0_output.ttl`. Useful configuration is defined in `src/versioning/config.py` or by environment variables:
 
-In the folder `.github/workflows` you can find the `main.yml` file with the istructions to automatically update the I14Y graph on LINDAS. At the moment (31.07.2025) the synchronisation takes place automatically every week (monday at midnight). Synchronisation can also be triggered manually if necessary.
+- `BASE_API_URL`: i14y public concepts endpoint.
+- `STATUSES`: comma-separated registration statuses.
+- `TARGET_GRAPH`, `LINDAS_QUERY_URL`, `LINDAS_UPDATE_URL`: LINDAS endpoints.
+- `I14Y_MODIFIED_LOOKBACK_HOURS`: incremental change window.
+- `CLEAR_GRAPH`: workflow switch that drops the target graph before publishing the generated batches.
+- `STARDOG_USER` / `STARDOG_PASSWORD`: credentials for protected LINDAS environments.
 
-### Workflow Logic
+Set `DEBUG_LOCAL_TEST=true` only in environments that require the local proxy/TLS configuration.
 
-1. `get-concepts`:
+## GitHub Actions
 
-   - Retrieves all concept IDs the specified statuses or harcoded Ids
-   - Calculates the number of batches needed based on the `BATCH_SIZE` environment variable
-   - Creates a job matrix for parallel processing of batches
-   - Outputs the list of concept IDs and batch configuration
+`.github/workflows/reusable_workflow.yml` is called by TEST, INT and PROD workflows. It:
 
-2. `process-batches`:
+1. Builds batches and archives the frozen source manifest.
+2. Produces Turtle in parallel batches and validates it with `rapper`.
+3. Uploads the generated artifacts sequentially.
+4. Compares i14y and LINDAS counts of concept *versions* for every configured registration status.
 
-   - Processes concepts to generate RDF triples in Turtle format
-   - Uploads each batch's output as a separate artifact for later combination
-
-3. `clear-and-upload`:
-
-   - Downloads all batch artifacts after all batches complete
-   - Clears the existing Stardog graph
-   - Uploads the artifacts to the target Stardog graph
-
-4. `final_summary`
-
-### Environment Configuration
-
-The authentication is done via GitHub secrets `STARDOG_USERNAME` and `STARDOG_PASSWORD_TEST`. The instructions are set for the test environment. To change to production:
-
-1. Modify the `LINDAS_UPDATE_URL` in the `env` section of `main.yml`:
-
-   ```yaml
-   env:
-     LINDAS_UPDATE_URL: "https://stardog-prod.cluster.ldbar.ch/lindas" # Change from test to prod
-   ```
-
-2. Update the password secret references in both the "Clear Stardog Graph" and "Upload to Stardog" steps:
-   ```yaml
-   env:
-     STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD_PROD }} # Change from TEST to PROD
-   ```
-
-### Customization
-
-You can adjust the batch size by modifying the `BATCH_SIZE` environment variable:
-
-```yaml
-env:
-  BATCH_SIZE: "30" # Increase for fewer larger batches, decrease for more smaller batches
-```
-
-The status filter for concepts can be modified in the Python configuration to control which concepts are processed.
-
-## LINDAS publication: some notes
-
-In this repository it's stored a Jupyter notebook named [_stardog_queries_examples.ipynb_](https://github.com/I14Y-ch/LINDAS/blob/9675b7e044e4607322d0e67806172c5d66ae2ad7/stardog_queries_examples.ipynb) that contains some python examples that demonstrates how to make requests to the stardog database (upload, update, retrieve and delete).
-
-LINDAS uses three environement for different workflow stages:
-
-- TEST: Development & experimental work, BASE API URL: https://stardog-test.cluster.ldbar.ch/lindas
-- INT: Pre-production validation, BASE API URL: https://stardog-int.cluster.ldbar.ch/lindas
-- PROD: Production, BASE API URL: https://stardog.cluster.ldbar.ch/lindas
-
-The i14y graph in which all data at the moment is published is: https://lindas.admin.ch/fso/i14y.
-
-## URI creation
-
-The URI created for the publication in RDF of I14Y concepts is currently based on:
-
-`https://register.ld.admin.ch/i14y/concept/`
-
-Main URI patterns:
-
-| Object                                | URI                                                                                                              | Name                                                 |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Concept / Defined term set identity   | https://register.ld.admin.ch/i14y/concept/[concept_identifier]                                                   | [concept name] + " (identity)"                       |
-| Concept / Defined term set version    | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/version/[version_number]                          | [concept name] + " (version " + [version number] ")" |
-| Code / Defined term identity          | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/[code_identifier]                                 | [code name]                                          |
-| Code / Defined term version           | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/[code_identifier]/version/[version_number]        | [code name]                                          |
-| Concept hierarchy root (all) identity | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/all                                               | constant label "All"                                 |
-| Concept hierarchy root (all) version  | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/all/version/[version_number]                      | constant label "All"                                 |
-| Classification level identity         | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/level_[n]                                         | e.g. Level 1, Level 2                                |
-| Classification level version          | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/level_[n]/version/[version_number]                | e.g. Level 1, Level 2                                |
-| Skolemized node identity              | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/.well-known/genid/[hash]                          | generated                                            |
-| Skolemized node version               | https://register.ld.admin.ch/i14y/concept/[concept_identifier]/.well-known/genid/[hash]/version/[version_number] | generated                                            |
+A metric mismatch fails the workflow. The TEST full-lifecycle workflow additionally clears the graph, imports the complete inventory, deletes every concept with the production deletion mechanism and verifies that no triples remain.
