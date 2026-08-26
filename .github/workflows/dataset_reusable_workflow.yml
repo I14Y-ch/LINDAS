@@ -278,9 +278,46 @@ jobs:
           LindasDatasetsAPI(DatasetConfig.from_env()).delete_orphaned_publisher_agents()
           PY
 
-  verify-source-metrics:
+  publish-portal-metadata:
     needs: [get-datasets, reconcile-and-upload]
     if: ${{ always() && needs.get-datasets.result == 'success' && (needs.reconcile-and-upload.result == 'success' || needs.reconcile-and-upload.result == 'skipped') }}
+    runs-on: ${{ inputs.RUNNER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y raptor2-utils
+          python -m pip install -r requirements.txt
+      - name: Generate and validate portal dataset descriptions
+        run: |
+          python -m concept2sharedDimension.src.main \
+            --publication-metadata-only \
+            --output i14y_portal_metadata.ttl
+          rapper -i turtle -c i14y_portal_metadata.ttl
+      - name: Upload portal dataset descriptions
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+        run: |
+          python - <<'PY'
+          from dataset2lindas.src.api import LindasDatasetsAPI
+          from dataset2lindas.src.config import DatasetConfig
+
+          config = DatasetConfig.from_env()
+          lindas = LindasDatasetsAPI(config)
+          legacy_uri = "https://register.ld.admin.ch/.well-known/void/dataset/i14y"
+          lindas.update(
+              f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{legacy_uri}> ?p ?o . }} }}"
+          )
+          lindas.upload_turtle("i14y_portal_metadata.ttl")
+          PY
+  verify-source-metrics:
+    needs: [get-datasets, reconcile-and-upload, publish-portal-metadata]
+    if: ${{ always() && needs.get-datasets.result == 'success' && needs.publish-portal-metadata.result == 'success' }}
     runs-on: ${{ inputs.RUNNER }}
     env:
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
@@ -317,7 +354,12 @@ jobs:
             (COUNT(DISTINCT ?structured_dataset) AS ?structure_count)
           WHERE {{
             GRAPH <{config.target_graph}> {{
-              ?dataset a dcat:Dataset .
+              ?dataset a dcat:Dataset ;
+                       dct:identifier ?identifier .
+              FILTER(
+                isIRI(?dataset) &&
+                STRSTARTS(STR(?dataset), "{config.dataset_uri_base}")
+              )
               OPTIONAL {{
                 ?dataset dct:conformsTo ?structure .
                 FILTER(
@@ -358,7 +400,7 @@ jobs:
               raise RuntimeError("Dataset source/LINDAS metrics do not match")
           PY
   final-summary:
-    needs: [get-datasets, process-batches, reconcile-and-upload, verify-source-metrics]
+    needs: [get-datasets, process-batches, reconcile-and-upload, publish-portal-metadata, verify-source-metrics]
     if: always()
     runs-on: ${{ inputs.RUNNER }}
     steps:

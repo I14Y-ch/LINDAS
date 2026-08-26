@@ -72,6 +72,8 @@ The reusable workflows are:
 
 Caller workflows target GraphDB TEST, INT and PROD. They validate Turtle with `rapper`, keep artifacts only for generated batches or failures, and use per-environment concurrency locks because LINDAS update requests must not overlap.
 
+After each run, both reusable workflows also upload the same two stable VoID/DCAT dataset descriptions for the LINDAS portal: one for i14y concepts and one for i14y dataset metadata.
+
 Two additional TEST-only lifecycle workflows clear the graph, import the complete inventory, delete every imported resource and verify that the graph is empty. If triples remain, they export the remaining graph as an artifact for diagnosis.
 
 ## SPARQL examples

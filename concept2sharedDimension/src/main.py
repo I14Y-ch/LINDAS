@@ -15,8 +15,23 @@ def main():
     parser.add_argument('--batch-index', type=int, default=0, help='Batch index number')
     parser.add_argument('--batch-size', type=int, default=50, help='Number of concepts per batch')
     parser.add_argument('--concept-ids', type=str, help='Comma-separated list of concept IDs to process')
+    parser.add_argument(
+        '--publication-metadata-only',
+        action='store_true',
+        help='Write the stable I14Y portal dataset descriptions without processing concepts',
+    )
+    parser.add_argument('--output', help='Output Turtle path for --publication-metadata-only')
 
     args = parser.parse_args()
+    if args.publication_metadata_only:
+        output_file = args.output or "i14y_portal_metadata.ttl"
+        processor = VersionProcessor(BASE_URI, output_file=output_file)
+        try:
+            CatalogManager(processor.vm).create_publication_descriptions()
+        finally:
+            processor.vm.close()
+        print(f"Wrote I14Y portal dataset descriptions to {output_file}")
+        return
 
     # Workflow batches receive the same source inventory that built their
     # matrix. This prevents a change on i14y during the run from changing the
@@ -39,8 +54,6 @@ def main():
         output_file = OUTPUT_FILE_NAME
 
     processor = VersionProcessor(BASE_URI,output_file=output_file)
-    if CLEAR_GRAPH:
-        CatalogManager(processor.vm).create_catalog_description()
 
     try:
         # Priority 1: Check for environment variable (used by GitHub Actions)

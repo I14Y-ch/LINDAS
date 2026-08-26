@@ -170,6 +170,12 @@ WHERE {
   GRAPH <https://lindas.admin.ch/fso/i14y> {
     ?dataset a dcat:Dataset ;
              dct:identifier ?identifier .
+    FILTER(
+      STRSTARTS(
+        STR(?dataset),
+        "https://register.ld.admin.ch/i14y/dataset/"
+      )
+    )
   }
 }
 ORDER BY ?identifier

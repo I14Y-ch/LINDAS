@@ -173,7 +173,8 @@ python -m dataset2lindas.src.main --catalog-only --output dataset_catalog.ttl
 1. `get-datasets` scans i14y, obtains the source structure count, creates the plan and freezes the source manifest.
 2. `process-batches` creates Turtle batches with up to five parallel i14y workers. Every batch is validated with `rapper`.
 3. `reconcile-and-upload` clears the graph when requested, otherwise applies deletions, optionally generates the common catalogue, then uploads the validated Turtle files sequentially.
-4. `verify-source-metrics` compares the frozen i14y dataset count and structure count with LINDAS. Any mismatch fails the workflow.
+4. `publish-portal-metadata` generates and uploads the two stable VoID/DCAT portal dataset descriptions, even when no dataset requires a new Turtle batch.
+5. `verify-source-metrics` compares the frozen i14y dataset count and structure count with LINDAS. Any mismatch fails the workflow.
 
 `dataset_graphdb_test_incremental_update.yml` runs on weekdays at 03:30 UTC. It uses the same concurrency group as `dataset_graphdb_test_full_lifecycle.yml`, so the destructive lifecycle test cannot overlap an incremental TEST update.
 

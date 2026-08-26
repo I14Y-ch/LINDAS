@@ -9,8 +9,10 @@ from rdflib import URIRef, BNode, Literal
 from rdflib.namespace import RDF
 import hashlib
 from urllib.parse import quote
+import os
 
 ORG = Namespace("http://www.w3.org/ns/org#")
+DCAT = Namespace("http://www.w3.org/ns/dcat#")
 
 
 class StreamingTurtleWriter:
@@ -248,93 +250,75 @@ class GraphManager:
 
 
 class CatalogManager:
-    def __init__(self, graph_manager):
+    """Create the two portal-facing dataset descriptions for the i14y graph."""
+
+    CONCEPTS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts")
+    DATASETS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets")
+    LINDAS_DATASET = URIRef("https://schema.ld.admin.ch/LindasDataset")
+    PUBLISHER_URI = URIRef("https://register.ld.admin.ch/i14y/agent/CH1")
+
+    def __init__(self, graph_manager, sparql_endpoint=None):
         self.vm = graph_manager
+        endpoint = sparql_endpoint or os.environ.get("LINDAS_QUERY_URL", LINDAS_QUERY_URL)
+        self.sparql_endpoint = URIRef(endpoint)
+    def _add_dataset_description(self, uri, titles, descriptions):
+        """Add a stable VoID/DCAT description that the LINDAS portal can index."""
+        for rdf_type in (VOID.Dataset, DCAT.Dataset, SDO.Dataset, self.LINDAS_DATASET):
+            self.vm.graph.add((uri, RDF.type, rdf_type))
+        self.vm.graph.add((uri, VOID.sparqlEndpoint, self.sparql_endpoint))
+        self.vm.graph.add((uri, DCTERMS.publisher, self.PUBLISHER_URI))
+        self.vm.graph.add((uri, SDO.publisher, self.PUBLISHER_URI))
+
+        for language, title in titles.items():
+            self.vm.graph.add((uri, DCTERMS.title, Literal(title, lang=language)))
+            self.vm.graph.add((uri, SDO.name, Literal(title, lang=language)))
+
+        for language, description in descriptions.items():
+            self.vm.graph.add((uri, DCTERMS.description, Literal(description, lang=language)))
+            self.vm.graph.add((uri, SDO.description, Literal(description, lang=language)))
 
     def create_catalog_description(self):
-        """Create metadata for the i14y catalog"""
-        catalog_uri = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y")
-        void_uri = URIRef("https://ld.admin.ch/.well-known/void")
+        """Backward-compatible entry point for the i14y concepts description."""
+        self.create_concepts_dataset_description()
 
-        self.vm.graph.add((catalog_uri, RDF.type, SDO.DataCatalog))
-        # self.vm.graph.add((catalog_uri, RDF.type, VOID.DatasetDescription))
-        self.vm.graph.add((catalog_uri, RDFA.uri, URIRef("https://register.ld.admin.ch/i14y/")))
-        # self.vm.graph.add((catalog_uri, SDO.includedInDataCatalog, void_uri)) not used in LINDAS at the moment
-
-        self.vm.graph.add(
-            (catalog_uri, SKOS.prefLabel, Literal("Data published on register.ld.admin.ch/i14y", lang="en"))
-        )
-        # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
-        self.vm.graph.add((catalog_uri, SDO.name, Literal("Data published on register.ld.admin.ch/i14y", lang="en")))
-        # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("This catalog contains data from I14Y. Specifically, it contains I14Y concepts made available as linked data.", lang="en")))
-        self.vm.graph.add(
-            (
-                catalog_uri,
-                SDO.description,
-                Literal(
-                    "This catalog contains data from I14Y. Specifically, it contains I14Y concepts made available as linked data.",
-                    lang="en",
-                ),
-            )
+    def create_concepts_dataset_description(self):
+        self._add_dataset_description(
+            self.CONCEPTS_DATASET_URI,
+            {
+                "de": "I14Y Konzepte",
+                "en": "I14Y Concepts",
+                "fr": "Concepts I14Y",
+                "it": "Concetti I14Y",
+            },
+            {
+                "de": "In I14Y registrierte Codelisten und Konzepte, die als Linked Data veröffentlicht werden.",
+                "en": "Code lists and concepts registered in I14Y and published as Linked Data.",
+                "fr": "Listes de codes et concepts enregistrés dans I14Y et publiés sous forme de données liées.",
+                "it": "Elenchi di codici e concetti registrati in I14Y e pubblicati come dati collegati.",
+            },
         )
 
-        self.vm.graph.add(
-            (catalog_uri, SKOS.prefLabel, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr"))
-        )
-        # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr")))
-        self.vm.graph.add(
-            (catalog_uri, SDO.name, Literal("Données publiées sur register.ld.admin.ch/i14y", lang="fr"))
-        )
-        # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Ce catalogue contient des données d'I14Y. Plus précisément, il contient des concepts I14Y mis à disposition sous forme de données liées.", lang="fr")))
-        self.vm.graph.add(
-            (
-                catalog_uri,
-                SDO.description,
-                Literal(
-                    "Ce catalogue contient des données d'I14Y. Plus précisément, il contient des concepts I14Y mis à disposition sous forme de données liées.",
-                    lang="fr",
-                ),
-            )
+    def create_datasets_dataset_description(self):
+        self._add_dataset_description(
+            self.DATASETS_DATASET_URI,
+            {
+                "de": "I14Y Datensatzmetadaten",
+                "en": "I14Y Dataset Metadata",
+                "fr": "Métadonnées de datasets I14Y",
+                "it": "Metadati dei dataset I14Y",
+            },
+            {
+                "de": "In I14Y registrierte DCAT-Datensatzmetadaten, die als Linked Data veröffentlicht werden.",
+                "en": "DCAT dataset metadata registered in I14Y and published as Linked Data.",
+                "fr": "Métadonnées de datasets DCAT enregistrées dans I14Y et publiées sous forme de données liées.",
+                "it": "Metadati dei dataset DCAT registrati in I14Y e pubblicati come dati collegati.",
+            },
         )
 
-        self.vm.graph.add(
-            (catalog_uri, SKOS.prefLabel, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it"))
-        )
-        # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
-        self.vm.graph.add((catalog_uri, SDO.name, Literal("Dati pubblicati su register.ld.admin.ch/i14y", lang="it")))
-        # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Questo catalogo contiene dati da I14Y. Specificamente, contiene concetti I14Y resi disponibili come linked data.", lang="it")))
-        self.vm.graph.add(
-            (
-                catalog_uri,
-                SDO.description,
-                Literal(
-                    "Questo catalogo contiene dati da I14Y. Specificamente, contiene concetti I14Y resi disponibili come linked data.",
-                    lang="it",
-                ),
-            )
-        )
-
-        self.vm.graph.add(
-            (catalog_uri, SKOS.prefLabel, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de"))
-        )
-        # self.vm.graph.add((catalog_uri, DCTERMS.title, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de")))
-        self.vm.graph.add(
-            (catalog_uri, SDO.name, Literal("Daten veröffentlicht auf register.ld.admin.ch/i14y", lang="de"))
-        )
-        # self.vm.graph.add((catalog_uri, DCTERMS.description, Literal("Dieser Katalog enthält Daten von I14Y. Insbesondere enthält er I14Y-Konzepte, die als Linked Data verfügbar gemacht wurden.", lang="de")))
-        self.vm.graph.add(
-            (
-                catalog_uri,
-                SDO.description,
-                Literal(
-                    "Dieser Katalog enthält Daten von I14Y. Insbesondere enthält er I14Y-Konzepte, die als Linked Data verfügbar gemacht wurden.",
-                    lang="de",
-                ),
-            )
-        )
-
-        return catalog_uri
-
+    def create_publication_descriptions(self):
+        """Write both stable portal descriptions in one small Turtle artifact."""
+        self.create_concepts_dataset_description()
+        self.create_datasets_dataset_description()
 
 class CodeListManager:
     def __init__(self, version_manager):

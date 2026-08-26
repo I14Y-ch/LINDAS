@@ -347,9 +347,45 @@ jobs:
         run: |
           rm -rf batches/*
           echo "All batch files removed after upload"
-  verify-source-metrics:
+  publish-portal-metadata:
     needs: [get-concepts, clear-and-upload]
     if: ${{ always() && needs.get-concepts.result == 'success' && (needs.clear-and-upload.result == 'success' || needs.clear-and-upload.result == 'skipped') }}
+    runs-on: ${{ inputs.RUNNER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y raptor2-utils
+          python -m pip install -r requirements.txt
+      - name: Generate and validate portal dataset descriptions
+        run: |
+          python -m concept2sharedDimension.src.main \
+            --publication-metadata-only \
+            --output i14y_portal_metadata.ttl
+          rapper -i turtle -c i14y_portal_metadata.ttl
+      - name: Upload portal dataset descriptions
+        env:
+          STARDOG_USER: ${{ secrets.STARDOG_USER }}
+          STARDOG_PASSWORD: ${{ secrets.STARDOG_PASSWORD }}
+        run: |
+          python - <<'PY'
+          import os
+          from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
+
+          target_graph = os.environ["TARGET_GRAPH"]
+          legacy_uri = "https://register.ld.admin.ch/.well-known/void/dataset/i14y"
+          LindasAPIHelper.graphdb_update(
+              f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{legacy_uri}> ?p ?o . }} }}"
+          )
+          LindasAPIHelper.graphdb_upload_ttl("i14y_portal_metadata.ttl", target_graph)
+          PY
+  verify-source-metrics:
+    needs: [get-concepts, clear-and-upload, publish-portal-metadata]
+    if: ${{ always() && needs.get-concepts.result == 'success' && needs.publish-portal-metadata.result == 'success' }}
     runs-on: ${{ inputs.RUNNER }}
     env:
       STARDOG_USER: ${{ secrets.STARDOG_USER }}
@@ -421,7 +457,7 @@ jobs:
               raise RuntimeError("Concept source/LINDAS status metrics do not match")
           PY
   final-summary:
-    needs: [get-concepts, process-batches, clear-and-upload, verify-source-metrics]
+    needs: [get-concepts, process-batches, clear-and-upload, publish-portal-metadata, verify-source-metrics]
     runs-on: ${{ inputs.RUNNER }}
     if: always()
     steps:

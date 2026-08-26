@@ -96,6 +96,15 @@ jobs:
               failures.append(("orphaned publisher agents", str(error)))
               print(f"::error::Could not clean orphaned publisher agents: {error}")
 
+          portal_dataset_uris = (
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts",
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
+          )
+          for portal_dataset_uri in portal_dataset_uris:
+              lindas.update(
+                  f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{portal_dataset_uri}> ?p ?o . }} }}"
+              )
+              print(f"Deleted portal dataset description: {portal_dataset_uri}")
           rows = lindas.query(
               f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{config.target_graph}> {{ ?s ?p ?o . }} }}"
           )

@@ -91,6 +91,7 @@ Set `DEBUG_LOCAL_TEST=true` only in environments that require the local proxy/TL
 1. Builds batches and archives the frozen source manifest.
 2. Produces Turtle in parallel batches and validates it with `rapper`.
 3. Uploads the generated artifacts sequentially.
-4. Compares i14y and LINDAS counts of concept *versions* for every configured registration status.
+4. Generates and uploads the two stable VoID/DCAT portal dataset descriptions, even when no concept requires a new Turtle batch.
+5. Compares i14y and LINDAS counts of concept *versions* for every configured registration status.
 
 A metric mismatch fails the workflow. The TEST full-lifecycle workflow additionally clears the graph, imports the complete inventory, deletes every concept with the production deletion mechanism and verifies that no triples remain.

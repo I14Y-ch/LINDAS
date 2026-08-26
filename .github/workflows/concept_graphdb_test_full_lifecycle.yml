@@ -81,12 +81,15 @@ jobs:
                   print(f"Deletion progress: {index}/{len(identifiers)}")
 
           target_graph = os.environ["TARGET_GRAPH"]
-          catalog_uri = "https://register.ld.admin.ch/.well-known/void/dataset/i14y"
-          LindasAPIHelper.graphdb_update(
-              f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{catalog_uri}> ?p ?o . }} }}"
+          portal_dataset_uris = (
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts",
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
           )
-          print(f"Deleted global concept catalog: {catalog_uri}")
-
+          for portal_dataset_uri in portal_dataset_uris:
+              LindasAPIHelper.graphdb_update(
+                  f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{portal_dataset_uri}> ?p ?o . }} }}"
+              )
+              print(f"Deleted portal dataset description: {portal_dataset_uri}")
           rows = LindasAPIHelper.lindas_query(
               f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{target_graph}> {{ ?s ?p ?o . }} }}"
           )
