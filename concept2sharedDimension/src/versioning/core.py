@@ -260,7 +260,7 @@ class CatalogManager:
 
     def __init__(self, graph_manager, sparql_endpoint=None):
         self.vm = graph_manager
-        endpoint = sparql_endpoint or os.environ.get("LINDAS_QUERY_URL", LINDAS_QUERY_URL)
+        endpoint = sparql_endpoint or "https://register.ld.admin.ch/query/"
         self.sparql_endpoint = URIRef(endpoint)
     def _add_dataset_description(self, uri, titles, descriptions):
         """Add a stable VoID/DCAT description that the LINDAS portal can index."""
