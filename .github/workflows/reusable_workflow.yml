@@ -384,7 +384,15 @@ jobs:
           )
           for description_uri in description_uris:
               LindasAPIHelper.graphdb_update(
-                  f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{description_uri}> ?p ?o . }} }}"
+                  f'''DELETE WHERE {{
+                    GRAPH <{target_graph}> {{
+                      ?s ?p ?o .
+                      FILTER(
+                        STR(?s) = "{description_uri}" ||
+                        STRSTARTS(STR(?s), "{description_uri}/")
+                      )
+                    }}
+                  }}'''
               )
           LindasAPIHelper.graphdb_upload_ttl("i14y_concepts_portal_metadata.ttl", target_graph)
           PY

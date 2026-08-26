@@ -254,15 +254,24 @@ class CatalogManager:
 
     CONCEPTS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts")
     DATASETS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets")
+    CONCEPTS_SPARQL_EXAMPLE_URI = URIRef(
+        "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts/examples/sparql"
+    )
+    DATASETS_SPARQL_EXAMPLE_URI = URIRef(
+        "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets/examples/sparql"
+    )
     LINDAS_DATASET = URIRef("https://schema.ld.admin.ch/LindasDataset")
     PUBLISHER_URI = URIRef("https://register.ld.admin.ch/i14y/agent/CH1")
     I14Y_LANDING_PAGE = URIRef("https://www.i14y.admin.ch/")
+    SPARQL_EXAMPLES_URL = URIRef(
+        "https://github.com/metadata-swiss/LINDAS/blob/main/SPARQL_EXAMPLES.md"
+    )
 
     def __init__(self, graph_manager, sparql_endpoint=None):
         self.vm = graph_manager
         endpoint = sparql_endpoint or "https://register.ld.admin.ch/query/"
         self.sparql_endpoint = URIRef(endpoint)
-    def _add_dataset_description(self, uri, titles, descriptions):
+    def _add_dataset_description(self, uri, titles, descriptions, sparql_example_uri):
         """Add a stable VoID/DCAT description that the LINDAS portal can index."""
         for rdf_type in (VOID.Dataset, DCAT.Dataset, SDO.Dataset, self.LINDAS_DATASET):
             self.vm.graph.add((uri, RDF.type, rdf_type))
@@ -278,6 +287,18 @@ class CatalogManager:
         for language, description in descriptions.items():
             self.vm.graph.add((uri, DCTERMS.description, Literal(description, lang=language)))
             self.vm.graph.add((uri, SDO.description, Literal(description, lang=language)))
+
+        self.vm.graph.add((uri, SDO.workExample, sparql_example_uri))
+        self.vm.graph.add((sparql_example_uri, RDF.type, SDO.CreativeWork))
+        self.vm.graph.add((sparql_example_uri, SDO.encodingFormat, Literal("text/html")))
+        self.vm.graph.add((sparql_example_uri, SDO.url, self.SPARQL_EXAMPLES_URL))
+        for language, name in {
+            "de": "SPARQL-Abfragebeispiele für I14Y Linked Data",
+            "en": "SPARQL query examples for I14Y Linked Data",
+            "fr": "Exemples de requêtes SPARQL pour les données liées I14Y",
+            "it": "Esempi di query SPARQL per i dati collegati I14Y",
+        }.items():
+            self.vm.graph.add((sparql_example_uri, SDO.name, Literal(name, lang=language)))
 
     def create_catalog_description(self):
         """Backward-compatible entry point for the i14y concepts description."""
@@ -298,6 +319,7 @@ class CatalogManager:
                 "fr": "Concepts de type liste de codes enregistrés dans I14Y et publiés sous forme de données liées.",
                 "it": "Concetti di tipo elenco di codici registrati in I14Y e pubblicati come dati collegati.",
             },
+            self.CONCEPTS_SPARQL_EXAMPLE_URI,
         )
 
     def create_datasets_dataset_description(self):
@@ -315,6 +337,7 @@ class CatalogManager:
                 "fr": "Métadonnées de datasets DCAT enregistrées dans I14Y et publiées sous forme de données liées.",
                 "it": "Metadati dei dataset DCAT registrati in I14Y e pubblicati come dati collegati.",
             },
+            self.DATASETS_SPARQL_EXAMPLE_URI,
         )
 
     def create_publication_descriptions(self, kind="all"):

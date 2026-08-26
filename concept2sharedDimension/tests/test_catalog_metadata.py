@@ -1,8 +1,6 @@
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
 
 from rdflib import Graph, Literal, Namespace, RDF, URIRef
 from rdflib.namespace import DCTERMS, VOID
@@ -38,19 +36,21 @@ class CatalogMetadataTests(unittest.TestCase):
             output = Path(directory) / "portal_metadata.ttl"
             graph_manager = GraphManager("https://register.ld.admin.ch/i14y/concept/", output_file=output)
             try:
-                with patch.dict(os.environ, {"LINDAS_QUERY_URL": "https://test.lindas.example/query"}):
-                    CatalogManager(graph_manager).create_publication_descriptions()
+                CatalogManager(
+                    graph_manager,
+                    sparql_endpoint="https://test.lindas.example/query",
+                ).create_publication_descriptions()
             finally:
                 graph_manager.close()
 
             graph = Graph().parse(output, format="turtle")
 
         descriptions = (
-            URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts"),
-            URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets"),
+            (CatalogManager.CONCEPTS_DATASET_URI, CatalogManager.CONCEPTS_SPARQL_EXAMPLE_URI),
+            (CatalogManager.DATASETS_DATASET_URI, CatalogManager.DATASETS_SPARQL_EXAMPLE_URI),
         )
-        self.assertIn(Literal("Code-list concepts registered in I14Y and published as Linked Data.", lang="en"), graph.objects(descriptions[0], DCTERMS.description))
-        for description in descriptions:
+        self.assertIn(Literal("Code-list concepts registered in I14Y and published as Linked Data.", lang="en"), graph.objects(CatalogManager.CONCEPTS_DATASET_URI, DCTERMS.description))
+        for description, example in descriptions:
             self.assertIn((description, RDF.type, VOID.Dataset), graph)
             self.assertIn((description, RDF.type, DCAT.Dataset), graph)
             self.assertIn((description, RDF.type, SCHEMA.Dataset), graph)
@@ -61,6 +61,11 @@ class CatalogMetadataTests(unittest.TestCase):
             self.assertIn((description, DCAT.landingPage, URIRef("https://www.i14y.admin.ch/")), graph)
             self.assertEqual(4, len(list(graph.objects(description, DCTERMS.title))))
             self.assertEqual(4, len(list(graph.objects(description, DCTERMS.description))))
+            self.assertIn((description, SCHEMA.workExample, example), graph)
+            self.assertIn((example, RDF.type, SCHEMA.CreativeWork), graph)
+            self.assertIn((example, SCHEMA.encodingFormat, Literal("text/html")), graph)
+            self.assertIn((example, SCHEMA.url, URIRef("https://github.com/metadata-swiss/LINDAS/blob/main/SPARQL_EXAMPLES.md")), graph)
+            self.assertEqual(4, len(list(graph.objects(example, SCHEMA.name))))
 
 
 if __name__ == "__main__":
