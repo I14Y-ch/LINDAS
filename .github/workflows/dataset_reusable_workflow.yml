@@ -295,9 +295,10 @@ jobs:
       - name: Generate and validate portal dataset descriptions
         run: |
           python -m concept2sharedDimension.src.main \
-            --publication-metadata-only \
-            --output i14y_portal_metadata.ttl
-          rapper -i turtle -c i14y_portal_metadata.ttl
+            --publication-metadata-only
+            --publication-metadata-kind datasets \
+            --output i14y_datasets_portal_metadata.ttl
+          rapper -i turtle -c i14y_datasets_portal_metadata.ttl
       - name: Upload portal dataset descriptions
         env:
           STARDOG_USER: ${{ secrets.STARDOG_USER }}
@@ -310,15 +311,13 @@ jobs:
           config = DatasetConfig.from_env()
           lindas = LindasDatasetsAPI(config)
           description_uris = (
-              "https://register.ld.admin.ch/.well-known/void/dataset/i14y",
-              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts",
               "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
           )
           for description_uri in description_uris:
               lindas.update(
                   f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{description_uri}> ?p ?o . }} }}"
               )
-          lindas.upload_turtle("i14y_portal_metadata.ttl")
+          lindas.upload_turtle("i14y_datasets_portal_metadata.ttl")
           PY
   verify-source-metrics:
     needs: [get-datasets, reconcile-and-upload, publish-portal-metadata]

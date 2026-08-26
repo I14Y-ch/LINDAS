@@ -317,10 +317,12 @@ class CatalogManager:
             },
         )
 
-    def create_publication_descriptions(self):
-        """Write both stable portal descriptions in one small Turtle artifact."""
-        self.create_concepts_dataset_description()
-        self.create_datasets_dataset_description()
+    def create_publication_descriptions(self, kind="all"):
+        """Write the requested stable portal description(s) in one Turtle artifact."""
+        if kind in ("concepts", "all"):
+            self.create_concepts_dataset_description()
+        if kind in ("datasets", "all"):
+            self.create_datasets_dataset_description()
 
 class CodeListManager:
     def __init__(self, version_manager):

@@ -21,16 +21,22 @@ def main():
         help='Write the stable I14Y portal dataset descriptions without processing concepts',
     )
     parser.add_argument('--output', help='Output Turtle path for --publication-metadata-only')
+    parser.add_argument(
+        '--publication-metadata-kind',
+        choices=('concepts', 'datasets', 'all'),
+        default='all',
+        help='Portal metadata description to write; defaults to both descriptions',
+    )
 
     args = parser.parse_args()
     if args.publication_metadata_only:
         output_file = args.output or "i14y_portal_metadata.ttl"
         processor = VersionProcessor(BASE_URI, output_file=output_file)
         try:
-            CatalogManager(processor.vm).create_publication_descriptions()
+            CatalogManager(processor.vm).create_publication_descriptions(args.publication_metadata_kind)
         finally:
             processor.vm.close()
-        print(f"Wrote I14Y portal dataset descriptions to {output_file}")
+        print(f"Wrote I14Y portal metadata ({args.publication_metadata_kind}) to {output_file}")
         return
 
     # Workflow batches receive the same source inventory that built their
