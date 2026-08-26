@@ -309,10 +309,15 @@ jobs:
 
           config = DatasetConfig.from_env()
           lindas = LindasDatasetsAPI(config)
-          legacy_uri = "https://register.ld.admin.ch/.well-known/void/dataset/i14y"
-          lindas.update(
-              f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{legacy_uri}> ?p ?o . }} }}"
+          description_uris = (
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y",
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts",
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
           )
+          for description_uri in description_uris:
+              lindas.update(
+                  f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{description_uri}> ?p ?o . }} }}"
+              )
           lindas.upload_turtle("i14y_portal_metadata.ttl")
           PY
   verify-source-metrics:
