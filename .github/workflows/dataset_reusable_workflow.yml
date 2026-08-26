@@ -295,7 +295,7 @@ jobs:
       - name: Generate and validate portal dataset descriptions
         run: |
           python -m concept2sharedDimension.src.main \
-            --publication-metadata-only
+            --publication-metadata-only \
             --publication-metadata-kind datasets \
             --output i14y_datasets_portal_metadata.ttl
           rapper -i turtle -c i14y_datasets_portal_metadata.ttl
