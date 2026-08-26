@@ -256,6 +256,7 @@ class CatalogManager:
     DATASETS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets")
     LINDAS_DATASET = URIRef("https://schema.ld.admin.ch/LindasDataset")
     PUBLISHER_URI = URIRef("https://register.ld.admin.ch/i14y/agent/CH1")
+    I14Y_LANDING_PAGE = URIRef("https://www.i14y.admin.ch/")
 
     def __init__(self, graph_manager, sparql_endpoint=None):
         self.vm = graph_manager
@@ -268,6 +269,7 @@ class CatalogManager:
         self.vm.graph.add((uri, VOID.sparqlEndpoint, self.sparql_endpoint))
         self.vm.graph.add((uri, DCTERMS.publisher, self.PUBLISHER_URI))
         self.vm.graph.add((uri, SDO.publisher, self.PUBLISHER_URI))
+        self.vm.graph.add((uri, DCAT.landingPage, self.I14Y_LANDING_PAGE))
 
         for language, title in titles.items():
             self.vm.graph.add((uri, DCTERMS.title, Literal(title, lang=language)))
@@ -291,10 +293,10 @@ class CatalogManager:
                 "it": "Concetti I14Y",
             },
             {
-                "de": "In I14Y registrierte Codelisten und Konzepte, die als Linked Data veröffentlicht werden.",
-                "en": "Code lists and concepts registered in I14Y and published as Linked Data.",
-                "fr": "Listes de codes et concepts enregistrés dans I14Y et publiés sous forme de données liées.",
-                "it": "Elenchi di codici e concetti registrati in I14Y e pubblicati come dati collegati.",
+                "de": "In I14Y registrierte Konzepte vom Typ Codeliste, die als Linked Data veröffentlicht werden.",
+                "en": "Code-list concepts registered in I14Y and published as Linked Data.",
+                "fr": "Concepts de type liste de codes enregistrés dans I14Y et publiés sous forme de données liées.",
+                "it": "Concetti di tipo elenco di codici registrati in I14Y e pubblicati come dati collegati.",
             },
         )
 
