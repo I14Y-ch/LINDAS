@@ -8,8 +8,10 @@ from collections import defaultdict
 from rdflib import URIRef, BNode, Literal
 from rdflib.namespace import RDF
 import hashlib
-from urllib.parse import quote
+import json
 import os
+from datetime import date, datetime, timezone
+from urllib.parse import quote
 
 ORG = Namespace("http://www.w3.org/ns/org#")
 DCAT = Namespace("http://www.w3.org/ns/dcat#")
@@ -257,6 +259,8 @@ class CatalogManager:
     LINDAS_DATASET = URIRef("https://schema.ld.admin.ch/LindasDataset")
     PUBLISHER_URI = URIRef("https://register.ld.admin.ch/i14y/agent/CH1")
     I14Y_LANDING_PAGE = URIRef("https://www.i14y.admin.ch/")
+    CONCEPTS_INITIAL_PUBLICATION_DATE = date(2026, 2, 17)
+    DATASETS_INITIAL_PUBLICATION_DATE = date(2026, 8, 27)
     SPARQL_EXAMPLES_URL = URIRef(
         "https://github.com/metadata-swiss/LINDAS/blob/main/SPARQL_EXAMPLES.md"
     )
@@ -265,7 +269,50 @@ class CatalogManager:
         self.vm = graph_manager
         endpoint = sparql_endpoint or "https://register.ld.admin.ch/query/"
         self.sparql_endpoint = URIRef(endpoint)
-    def _add_dataset_description(self, uri, titles, descriptions):
+
+    @classmethod
+    def initial_publication_date_for(cls, kind):
+        dates = {
+            "concepts": cls.CONCEPTS_INITIAL_PUBLICATION_DATE,
+            "datasets": cls.DATASETS_INITIAL_PUBLICATION_DATE,
+        }
+        try:
+            return dates[kind]
+        except KeyError as error:
+            raise ValueError(f"Unsupported portal metadata kind: {kind}") from error
+
+    @classmethod
+    def source_modified_date_from_manifest(cls, path, kind):
+        """Return the latest valid i14y source date from a frozen inventory."""
+        resource_key = {"concepts": "versions", "datasets": "datasets"}.get(kind)
+        initial_date = cls.initial_publication_date_for(kind)
+
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        resources = payload.get(resource_key)
+        if not isinstance(resources, list):
+            raise ValueError(f"Invalid {kind} source manifest: missing '{resource_key}'")
+
+        latest = None
+        for resource in resources:
+            value = (resource.get("system") or {}).get("modifiedAt") if isinstance(resource, dict) else None
+            if not isinstance(value, str) or not value.strip():
+                continue
+            try:
+                parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            resource_date = parsed.astimezone(timezone.utc).date()
+            latest = resource_date if latest is None or resource_date > latest else latest
+
+        return max(initial_date, latest or initial_date)
+
+    @staticmethod
+    def _date_literal(value):
+        return Literal(value.isoformat(), datatype=XSD.date)
+
+    def _add_dataset_description(self, uri, titles, descriptions, publication_date, modified_date=None):
         """Add a stable VoID/DCAT description that the LINDAS portal can index."""
         for rdf_type in (VOID.Dataset, DCAT.Dataset, SDO.Dataset, self.LINDAS_DATASET):
             self.vm.graph.add((uri, RDF.type, rdf_type))
@@ -273,6 +320,13 @@ class CatalogManager:
         self.vm.graph.add((uri, DCTERMS.publisher, self.PUBLISHER_URI))
         self.vm.graph.add((uri, SDO.publisher, self.PUBLISHER_URI))
         self.vm.graph.add((uri, DCAT.landingPage, self.I14Y_LANDING_PAGE))
+
+        publication_date_literal = self._date_literal(publication_date)
+        source_modified_date = self._date_literal(modified_date or publication_date)
+        for predicate in (SDO.dateCreated, SDO.datePublished, DCTERMS.issued):
+            self.vm.graph.add((uri, predicate, publication_date_literal))
+        for predicate in (SDO.dateModified, DCTERMS.modified):
+            self.vm.graph.add((uri, predicate, source_modified_date))
 
         for language, title in titles.items():
             self.vm.graph.add((uri, DCTERMS.title, Literal(title, lang=language)))
@@ -299,7 +353,7 @@ class CatalogManager:
         """Backward-compatible entry point for the i14y concepts description."""
         self.create_concepts_dataset_description()
 
-    def create_concepts_dataset_description(self):
+    def create_concepts_dataset_description(self, modified_date=None):
         self._add_dataset_description(
             self.CONCEPTS_DATASET_URI,
             {
@@ -314,9 +368,11 @@ class CatalogManager:
                 "fr": "Concepts de type liste de codes enregistrés dans I14Y et publiés sous forme de données liées.",
                 "it": "Concetti di tipo elenco di codici registrati in I14Y e pubblicati come dati collegati.",
             },
+            self.CONCEPTS_INITIAL_PUBLICATION_DATE,
+            modified_date,
         )
 
-    def create_datasets_dataset_description(self):
+    def create_datasets_dataset_description(self, modified_date=None):
         self._add_dataset_description(
             self.DATASETS_DATASET_URI,
             {
@@ -331,14 +387,16 @@ class CatalogManager:
                 "fr": "Métadonnées de datasets DCAT enregistrées dans I14Y et publiées sous forme de données liées.",
                 "it": "Metadati dei dataset DCAT registrati in I14Y e pubblicati come dati collegati.",
             },
+            self.DATASETS_INITIAL_PUBLICATION_DATE,
+            modified_date,
         )
 
-    def create_publication_descriptions(self, kind="all"):
+    def create_publication_descriptions(self, kind="all", modified_date=None):
         """Write the requested stable portal description(s) in one Turtle artifact."""
         if kind in ("concepts", "all"):
-            self.create_concepts_dataset_description()
+            self.create_concepts_dataset_description(modified_date)
         if kind in ("datasets", "all"):
-            self.create_datasets_dataset_description()
+            self.create_datasets_dataset_description(modified_date)
 
 class CodeListManager:
     def __init__(self, version_manager):

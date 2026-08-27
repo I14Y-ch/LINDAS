@@ -377,6 +377,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Download frozen source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: concept-source-manifest-${{ github.run_id }}
+          path: reconciliation
       - name: Install dependencies
         run: |
           # The Ubuntu 26.04 preview image contains Microsoft APT sources which
@@ -394,6 +399,7 @@ jobs:
           python -m concept2sharedDimension.src.main \
             --publication-metadata-only \
             --publication-metadata-kind concepts \
+            --publication-metadata-source-manifest reconciliation/concept_source_manifest.json \
             --output i14y_concepts_portal_metadata.ttl
           rapper -i turtle -c i14y_concepts_portal_metadata.ttl
       - name: Upload portal dataset descriptions
@@ -436,6 +442,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Download frozen source manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: concept-source-manifest-${{ github.run_id }}
+          path: reconciliation
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compare imported concept versions by registration status

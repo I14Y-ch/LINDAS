@@ -27,13 +27,30 @@ def main():
         default='all',
         help='Portal metadata description to write; defaults to both descriptions',
     )
+    parser.add_argument(
+        '--publication-metadata-source-manifest',
+        help='Frozen i14y source manifest used to derive the portal modified date',
+    )
 
     args = parser.parse_args()
     if args.publication_metadata_only:
         output_file = args.output or "i14y_portal_metadata.ttl"
+        if args.publication_metadata_source_manifest and args.publication_metadata_kind == 'all':
+            parser.error('--publication-metadata-source-manifest requires a concepts or datasets scope')
+        modified_date = (
+            CatalogManager.source_modified_date_from_manifest(
+                args.publication_metadata_source_manifest,
+                args.publication_metadata_kind,
+            )
+            if args.publication_metadata_source_manifest
+            else None
+        )
         processor = VersionProcessor(BASE_URI, output_file=output_file, enable_skolem=False)
         try:
-            CatalogManager(processor.vm).create_publication_descriptions(args.publication_metadata_kind)
+            CatalogManager(processor.vm).create_publication_descriptions(
+                args.publication_metadata_kind,
+                modified_date,
+            )
         finally:
             processor.vm.close()
         print(f"Wrote I14Y portal metadata ({args.publication_metadata_kind}) to {output_file}")

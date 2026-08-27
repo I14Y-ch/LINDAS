@@ -1,3 +1,5 @@
+import json
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -50,6 +52,10 @@ class CatalogMetadataTests(unittest.TestCase):
             CatalogManager.DATASETS_DATASET_URI,
         )
         self.assertIn(Literal("Code-list concepts registered in I14Y and published as Linked Data.", lang="en"), graph.objects(CatalogManager.CONCEPTS_DATASET_URI, DCTERMS.description))
+        expected_initial_dates = {
+            CatalogManager.CONCEPTS_DATASET_URI: "2026-02-17",
+            CatalogManager.DATASETS_DATASET_URI: "2026-08-27",
+        }
         for description in descriptions:
             examples = list(graph.objects(description, SCHEMA.workExample))
             self.assertEqual(1, len(examples))
@@ -63,6 +69,11 @@ class CatalogMetadataTests(unittest.TestCase):
             self.assertIn((description, DCTERMS.publisher, URIRef("https://register.ld.admin.ch/i14y/agent/CH1")), graph)
             self.assertIn((description, SCHEMA.publisher, URIRef("https://register.ld.admin.ch/i14y/agent/CH1")), graph)
             self.assertIn((description, DCAT.landingPage, URIRef("https://www.i14y.admin.ch/")), graph)
+            initial_date = Literal(expected_initial_dates[description], datatype=URIRef("http://www.w3.org/2001/XMLSchema#date"))
+            for predicate in (SCHEMA.dateCreated, SCHEMA.datePublished, DCTERMS.issued):
+                self.assertIn((description, predicate, initial_date), graph)
+            for predicate in (SCHEMA.dateModified, DCTERMS.modified):
+                self.assertIn((description, predicate, initial_date), graph)
             self.assertEqual(4, len(list(graph.objects(description, DCTERMS.title))))
             self.assertEqual(4, len(list(graph.objects(description, DCTERMS.description))))
             self.assertIn((description, SCHEMA.workExample, example), graph)
@@ -72,5 +83,23 @@ class CatalogMetadataTests(unittest.TestCase):
             self.assertEqual(4, len(list(graph.objects(example, SCHEMA.name))))
 
 
+    def test_source_modified_date_uses_the_latest_frozen_resource_date(self):
+        with TemporaryDirectory() as directory:
+            manifest = Path(directory) / "datasets.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "datasets": [
+                            {"system": {"modifiedAt": "2026-08-26T23:30:00Z"}},
+                            {"system": {"modifiedAt": "2026-08-28T01:00:00+02:00"}},
+                            {"system": {"modifiedAt": "not-a-date"}},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            modified_date = CatalogManager.source_modified_date_from_manifest(manifest, "datasets")
+
+        self.assertEqual(date(2026, 8, 27), modified_date)
 if __name__ == "__main__":
     unittest.main()
