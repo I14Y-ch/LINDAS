@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from rdflib import Graph, Literal, Namespace, RDF, URIRef
+from rdflib import BNode, Graph, Literal, Namespace, RDF, URIRef
 from rdflib.namespace import DCTERMS, VOID
 
 from concept2sharedDimension.src.versioning.core import CatalogManager, GraphManager
@@ -22,7 +22,7 @@ class CatalogMetadataTests(unittest.TestCase):
         for scope, expected, absent in cases:
             with self.subTest(scope=scope), TemporaryDirectory() as directory:
                 output = Path(directory) / f"{scope}.ttl"
-                graph_manager = GraphManager("https://register.ld.admin.ch/i14y/concept/", output_file=output)
+                graph_manager = GraphManager("https://register.ld.admin.ch/i14y/concept/", output_file=output, enable_skolem=False)
                 try:
                     CatalogManager(graph_manager).create_publication_descriptions(scope)
                 finally:
@@ -34,7 +34,7 @@ class CatalogMetadataTests(unittest.TestCase):
     def test_portal_metadata_contains_both_dataset_descriptions(self):
         with TemporaryDirectory() as directory:
             output = Path(directory) / "portal_metadata.ttl"
-            graph_manager = GraphManager("https://register.ld.admin.ch/i14y/concept/", output_file=output)
+            graph_manager = GraphManager("https://register.ld.admin.ch/i14y/concept/", output_file=output, enable_skolem=False)
             try:
                 CatalogManager(
                     graph_manager,
@@ -46,11 +46,15 @@ class CatalogMetadataTests(unittest.TestCase):
             graph = Graph().parse(output, format="turtle")
 
         descriptions = (
-            (CatalogManager.CONCEPTS_DATASET_URI, CatalogManager.CONCEPTS_SPARQL_EXAMPLE_URI),
-            (CatalogManager.DATASETS_DATASET_URI, CatalogManager.DATASETS_SPARQL_EXAMPLE_URI),
+            CatalogManager.CONCEPTS_DATASET_URI,
+            CatalogManager.DATASETS_DATASET_URI,
         )
         self.assertIn(Literal("Code-list concepts registered in I14Y and published as Linked Data.", lang="en"), graph.objects(CatalogManager.CONCEPTS_DATASET_URI, DCTERMS.description))
-        for description, example in descriptions:
+        for description in descriptions:
+            examples = list(graph.objects(description, SCHEMA.workExample))
+            self.assertEqual(1, len(examples))
+            example = examples[0]
+            self.assertIsInstance(example, BNode)
             self.assertIn((description, RDF.type, VOID.Dataset), graph)
             self.assertIn((description, RDF.type, DCAT.Dataset), graph)
             self.assertIn((description, RDF.type, SCHEMA.Dataset), graph)

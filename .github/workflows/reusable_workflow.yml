@@ -378,14 +378,16 @@ jobs:
           from concept2sharedDimension.src.versioning.utils import LindasAPIHelper
 
           target_graph = os.environ["TARGET_GRAPH"]
-          portal_resource_uris = (
+          portal_dataset_uris = (
               "https://register.ld.admin.ch/.well-known/void/dataset/i14y",
               "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts",
-              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts/examples/sparql",
           )
-          for resource_uri in portal_resource_uris:
+          for dataset_uri in portal_dataset_uris:
               LindasAPIHelper.graphdb_update(
-                  f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{resource_uri}> ?p ?o . }} }}"
+                  f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{dataset_uri}> <http://schema.org/workExample> ?example . ?example ?p ?o . }} }}"
+              )
+              LindasAPIHelper.graphdb_update(
+                  f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{dataset_uri}> ?p ?o . }} }}"
               )
           LindasAPIHelper.graphdb_upload_ttl("i14y_concepts_portal_metadata.ttl", target_graph)
           PY

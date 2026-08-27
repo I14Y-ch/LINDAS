@@ -7,8 +7,12 @@ from .config import CLEAR_GRAPH, DEBUG_INCLUDE_CODE_VERSIONS, I14Y_MODIFIED_LOOK
 
 
 class VersionProcessor:
-    def __init__(self, base_uri, output_file=OUTPUT_FILE_NAME):
-        self.vm = GraphManager(base_uri, output_file=output_file)
+    def __init__(self, base_uri, output_file=OUTPUT_FILE_NAME, enable_skolem=True):
+        self.vm = GraphManager(
+            base_uri,
+            output_file=output_file,
+            enable_skolem=enable_skolem,
+        )
         self.metadata = ConceptMetadataManager(self.vm)
         self.codelist = CodeListManager(self.vm)
         # self.all_entry_codes = set()

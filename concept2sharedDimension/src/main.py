@@ -31,7 +31,7 @@ def main():
     args = parser.parse_args()
     if args.publication_metadata_only:
         output_file = args.output or "i14y_portal_metadata.ttl"
-        processor = VersionProcessor(BASE_URI, output_file=output_file)
+        processor = VersionProcessor(BASE_URI, output_file=output_file, enable_skolem=False)
         try:
             CatalogManager(processor.vm).create_publication_descriptions(args.publication_metadata_kind)
         finally:
