@@ -139,8 +139,15 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install -r requirements.txt
       - name: Export dataset batch ${{ matrix.batch_index }}
         env:
@@ -185,8 +192,15 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install -r requirements.txt
       - name: Download synchronization plan
         uses: actions/download-artifact@v4
@@ -289,8 +303,15 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install -r requirements.txt
       - name: Generate and validate portal dataset descriptions
         run: |

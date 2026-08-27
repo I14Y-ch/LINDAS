@@ -66,8 +66,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Get OUTPUT_FILE_NAME from Python config
@@ -152,8 +159,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Calculate batch range
@@ -255,8 +269,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
@@ -358,8 +379,15 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y raptor2-utils
+          # The Ubuntu 26.04 preview image contains Microsoft APT sources which
+          # can temporarily reject updates. raptor2-utils is provided by Ubuntu.
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-"
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            raptor2-utils
           python -m pip install -r requirements.txt
       - name: Generate and validate portal dataset descriptions
         run: |
