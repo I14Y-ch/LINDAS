@@ -310,20 +310,13 @@ jobs:
 
           config = DatasetConfig.from_env()
           lindas = LindasDatasetsAPI(config)
-          description_uris = (
+          portal_resource_uris = (
               "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets/examples/sparql",
           )
-          for description_uri in description_uris:
+          for resource_uri in portal_resource_uris:
               lindas.update(
-                  f'''DELETE WHERE {{
-                    GRAPH <{config.target_graph}> {{
-                      ?s ?p ?o .
-                      FILTER(
-                        STR(?s) = "{description_uri}" ||
-                        STRSTARTS(STR(?s), "{description_uri}/")
-                      )
-                    }}
-                  }}'''
+                  f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{resource_uri}> ?p ?o . }} }}"
               )
           lindas.upload_turtle("i14y_datasets_portal_metadata.ttl")
           PY
