@@ -448,6 +448,22 @@ WHERE {{
         return LindasAPIHelper.lindas_concept_attributes[concept_identifier]
 
     @staticmethod
+    def delete_orphaned_publisher_agents():
+        """Remove i14y publisher agents that no longer have an owner."""
+        LindasAPIHelper.graphdb_update(f'''\
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+DELETE {{ GRAPH <{TARGET_GRAPH}> {{ ?agent ?p ?o . }} }}
+WHERE {{
+  GRAPH <{TARGET_GRAPH}> {{
+    ?agent a foaf:Agent ;
+           ?p ?o .
+    FILTER(isIRI(?agent) && STRSTARTS(STR(?agent), "{AGENT_URI_BASE}"))
+    FILTER NOT EXISTS {{ ?owner dct:publisher ?agent . }}
+  }}
+}}''')
+
+    @staticmethod
     def delete_concept(concept_identifier, *, force=False):
         """Delete a concept and its local skolemized closure.
 

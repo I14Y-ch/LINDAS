@@ -90,12 +90,6 @@ jobs:
               if index % 100 == 0 or index == len(plan.source_identifiers):
                   print(f"Deletion progress: {index}/{len(plan.source_identifiers)}")
 
-          try:
-              lindas.delete_orphaned_publisher_agents()
-          except Exception as error:
-              failures.append(("orphaned publisher agents", str(error)))
-              print(f"::error::Could not clean orphaned publisher agents: {error}")
-
           portal_dataset_uris = (
               "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
           )
@@ -107,6 +101,11 @@ jobs:
                   f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{portal_dataset_uri}> ?p ?o . }} }}"
               )
               print(f"Deleted portal dataset description and work example: {portal_dataset_uri}")
+          try:
+              lindas.delete_orphaned_publisher_agents()
+          except Exception as error:
+              failures.append(("orphaned publisher agents", str(error)))
+              print(f"::error::Could not clean orphaned publisher agents: {error}")
           rows = lindas.query(
               f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{config.target_graph}> {{ ?s ?p ?o . }} }}"
           )

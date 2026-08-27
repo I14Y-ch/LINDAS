@@ -93,6 +93,11 @@ jobs:
                   f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{portal_dataset_uri}> ?p ?o . }} }}"
               )
               print(f"Deleted portal dataset description and work example: {portal_dataset_uri}")
+          try:
+              LindasAPIHelper.delete_orphaned_publisher_agents()
+          except Exception as error:
+              failures.append(("orphaned publisher agents", str(error)))
+              print(f"::error::Could not clean orphaned publisher agents: {error}")
           rows = LindasAPIHelper.lindas_query(
               f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{target_graph}> {{ ?s ?p ?o . }} }}"
           )
