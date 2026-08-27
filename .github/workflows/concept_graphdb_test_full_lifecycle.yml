@@ -82,14 +82,17 @@ jobs:
 
           target_graph = os.environ["TARGET_GRAPH"]
           portal_dataset_uris = (
+              "https://register.ld.admin.ch/.well-known/void/dataset/i14y",
               "https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts",
-              "https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets",
           )
           for portal_dataset_uri in portal_dataset_uris:
               LindasAPIHelper.graphdb_update(
+                  f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{portal_dataset_uri}> <http://schema.org/workExample> ?example . ?example ?p ?o . }} }}"
+              )
+              LindasAPIHelper.graphdb_update(
                   f"DELETE WHERE {{ GRAPH <{target_graph}> {{ <{portal_dataset_uri}> ?p ?o . }} }}"
               )
-              print(f"Deleted portal dataset description: {portal_dataset_uri}")
+              print(f"Deleted portal dataset description and work example: {portal_dataset_uri}")
           rows = LindasAPIHelper.lindas_query(
               f"SELECT (COUNT(*) AS ?count) WHERE {{ GRAPH <{target_graph}> {{ ?s ?p ?o . }} }}"
           )
