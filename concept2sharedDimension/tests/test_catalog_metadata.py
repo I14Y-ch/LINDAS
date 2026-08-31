@@ -13,6 +13,7 @@ from concept2sharedDimension.src.versioning.core import CatalogManager, GraphMan
 DCAT = Namespace("http://www.w3.org/ns/dcat#")
 SCHEMA = Namespace("http://schema.org/")
 LINDAS = URIRef("https://schema.ld.admin.ch/LindasDataset")
+VCARD = Namespace("http://www.w3.org/2006/vcard/ns#")
 
 
 class CatalogMetadataTests(unittest.TestCase):
@@ -56,6 +57,10 @@ class CatalogMetadataTests(unittest.TestCase):
             CatalogManager.CONCEPTS_DATASET_URI: "2026-02-17",
             CatalogManager.DATASETS_DATASET_URI: "2026-08-27",
         }
+        expected_example_resources = {
+            CatalogManager.CONCEPTS_DATASET_URI: CatalogManager.CONCEPTS_EXAMPLE_RESOURCE_URI,
+            CatalogManager.DATASETS_DATASET_URI: CatalogManager.DATASETS_EXAMPLE_RESOURCE_URI,
+        }
         for description in descriptions:
             examples = list(graph.objects(description, SCHEMA.workExample))
             self.assertEqual(1, len(examples))
@@ -69,6 +74,15 @@ class CatalogMetadataTests(unittest.TestCase):
             self.assertIn((description, DCTERMS.publisher, URIRef("https://register.ld.admin.ch/i14y/agent/CH1")), graph)
             self.assertIn((description, SCHEMA.publisher, URIRef("https://register.ld.admin.ch/i14y/agent/CH1")), graph)
             self.assertIn((description, DCAT.landingPage, URIRef("https://www.i14y.admin.ch/")), graph)
+            self.assertIn((description, VOID.exampleResource, expected_example_resources[description]), graph)
+            contact_points = list(graph.objects(description, DCAT.contactPoint))
+            self.assertEqual(1, len(contact_points))
+            contact_point = contact_points[0]
+            self.assertIsInstance(contact_point, BNode)
+            self.assertIn((description, SCHEMA.contactPoint, contact_point), graph)
+            self.assertIn((contact_point, RDF.type, VCARD.Organization), graph)
+            self.assertIn((contact_point, VCARD.fn, Literal("I14Y")), graph)
+            self.assertIn((contact_point, VCARD.hasEmail, URIRef("mailto:i14y@bfs.admin.ch")), graph)
             initial_date = Literal(expected_initial_dates[description], datatype=URIRef("http://www.w3.org/2001/XMLSchema#date"))
             for predicate in (SCHEMA.dateCreated, SCHEMA.datePublished, DCTERMS.issued):
                 self.assertIn((description, predicate, initial_date), graph)

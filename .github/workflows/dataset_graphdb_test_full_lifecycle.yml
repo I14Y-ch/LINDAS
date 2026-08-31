@@ -95,7 +95,16 @@ jobs:
           )
           for portal_dataset_uri in portal_dataset_uris:
               lindas.update(
-                  f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{portal_dataset_uri}> <http://schema.org/workExample> ?example . ?example ?p ?o . }} }}"
+                  f'''PREFIX dcat: <http://www.w3.org/ns/dcat#>
+              PREFIX schema: <http://schema.org/>
+              DELETE {{ GRAPH <{config.target_graph}> {{ ?owned_resource ?p ?o . }} }}
+              WHERE {{
+                GRAPH <{config.target_graph}> {{
+                  <{portal_dataset_uri}> ?owned_predicate ?owned_resource .
+                  VALUES ?owned_predicate {{ schema:workExample dcat:contactPoint schema:contactPoint }}
+                  ?owned_resource ?p ?o .
+                }}
+              }}'''
               )
               lindas.update(
                   f"DELETE WHERE {{ GRAPH <{config.target_graph}> {{ <{portal_dataset_uri}> ?p ?o . }} }}"

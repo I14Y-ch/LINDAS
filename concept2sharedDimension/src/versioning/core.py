@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 ORG = Namespace("http://www.w3.org/ns/org#")
 DCAT = Namespace("http://www.w3.org/ns/dcat#")
+VCARD = Namespace("http://www.w3.org/2006/vcard/ns#")
 
 
 class StreamingTurtleWriter:
@@ -256,9 +257,16 @@ class CatalogManager:
 
     CONCEPTS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-concepts")
     DATASETS_DATASET_URI = URIRef("https://register.ld.admin.ch/.well-known/void/dataset/i14y-datasets")
+    CONCEPTS_EXAMPLE_RESOURCE_URI = URIRef(
+        "https://register.ld.admin.ch/i14y/concept/legalForm/version/1.2.0"
+    )
+    DATASETS_EXAMPLE_RESOURCE_URI = URIRef(
+        "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12300"
+    )
     LINDAS_DATASET = URIRef("https://schema.ld.admin.ch/LindasDataset")
     PUBLISHER_URI = URIRef("https://register.ld.admin.ch/i14y/agent/CH1")
     I14Y_LANDING_PAGE = URIRef("https://www.i14y.admin.ch/")
+    I14Y_CONTACT_EMAIL = "i14y@bfs.admin.ch"
     CONCEPTS_INITIAL_PUBLICATION_DATE = date(2026, 2, 17)
     DATASETS_INITIAL_PUBLICATION_DATE = date(2026, 8, 27)
     SPARQL_EXAMPLES_URL = URIRef(
@@ -312,7 +320,7 @@ class CatalogManager:
     def _date_literal(value):
         return Literal(value.isoformat(), datatype=XSD.date)
 
-    def _add_dataset_description(self, uri, titles, descriptions, publication_date, modified_date=None):
+    def _add_dataset_description(self, uri, titles, descriptions, publication_date, example_resource, modified_date=None):
         """Add a stable VoID/DCAT description that the LINDAS portal can index."""
         for rdf_type in (VOID.Dataset, DCAT.Dataset, SDO.Dataset, self.LINDAS_DATASET):
             self.vm.graph.add((uri, RDF.type, rdf_type))
@@ -320,6 +328,14 @@ class CatalogManager:
         self.vm.graph.add((uri, DCTERMS.publisher, self.PUBLISHER_URI))
         self.vm.graph.add((uri, SDO.publisher, self.PUBLISHER_URI))
         self.vm.graph.add((uri, DCAT.landingPage, self.I14Y_LANDING_PAGE))
+        self.vm.graph.add((uri, VOID.exampleResource, example_resource))
+
+        contact_point = BNode()
+        self.vm.graph.add((uri, DCAT.contactPoint, contact_point))
+        self.vm.graph.add((uri, SDO.contactPoint, contact_point))
+        self.vm.graph.add((contact_point, RDF.type, VCARD.Organization))
+        self.vm.graph.add((contact_point, VCARD.fn, Literal("I14Y")))
+        self.vm.graph.add((contact_point, VCARD.hasEmail, URIRef(f"mailto:{self.I14Y_CONTACT_EMAIL}")))
 
         publication_date_literal = self._date_literal(publication_date)
         source_modified_date = self._date_literal(modified_date or publication_date)
@@ -369,6 +385,7 @@ class CatalogManager:
                 "it": "Concetti di tipo elenco di codici registrati in I14Y e pubblicati come dati collegati.",
             },
             self.CONCEPTS_INITIAL_PUBLICATION_DATE,
+            self.CONCEPTS_EXAMPLE_RESOURCE_URI,
             modified_date,
         )
 
@@ -388,6 +405,7 @@ class CatalogManager:
                 "it": "Metadati dei dataset DCAT registrati in I14Y e pubblicati come dati collegati.",
             },
             self.DATASETS_INITIAL_PUBLICATION_DATE,
+            self.DATASETS_EXAMPLE_RESOURCE_URI,
             modified_date,
         )
 
